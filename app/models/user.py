@@ -48,7 +48,8 @@ class User(BaseModel):
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
-        lazy="selectin"
+        lazy="selectin",
+        foreign_keys="UserIdentity.user_id"
     )
     
     __table_args__ = (
