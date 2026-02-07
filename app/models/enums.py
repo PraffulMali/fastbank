@@ -6,3 +6,8 @@ class UserRole(str, Enum):
     ADMIN = "ADMIN"             
     STAFF = "STAFF"              
     USER = "USER"
+
+
+class AccountType(str, Enum):
+    SAVINGS = "SAVINGS"
+    CURRENT = "CURRENT"
