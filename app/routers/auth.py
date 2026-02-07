@@ -26,3 +26,16 @@ async def login(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to login"
         )
+
+@router.get("/verify-email", status_code=status.HTTP_200_OK)
+async def verify_email(
+    token: str,
+    db: AsyncSession = Depends(get_db)
+):
+    success = await UserService.verify_user_email(db, token)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token"
+        )
+    return {"message": "Email verified successfully"}

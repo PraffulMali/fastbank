@@ -23,7 +23,7 @@ class UserService:
         if not user:
             raise ValueError("Invalid email or password")
             
-        if not verify_password(login_data.password, user.password_hash):
+        if not verify_password(login_data.password, user.password):
             raise ValueError("Invalid email or password")
             
         if not user.is_active:
@@ -75,7 +75,7 @@ class UserService:
         new_user = User(
             email=user_in.email,
             full_name=user_in.full_name,
-            password_hash=get_password_hash(temp_password),
+            password=get_password_hash(temp_password),
             role=UserRole.ADMIN,
             tenant_id=user_in.tenant_id,
             is_active=True  # Set to True for testing, should be False in production
@@ -136,7 +136,7 @@ class UserService:
         new_user = User(
             email=user_in.email,
             full_name=user_in.full_name,
-            password_hash=get_password_hash(temp_password),
+            password=get_password_hash(temp_password),
             role=UserRole.USER,
             tenant_id=admin_tenant_id,
             is_active=True  # Set to True for testing, should be False in production
@@ -255,3 +255,29 @@ class UserService:
         await db.commit()
         await db.refresh(user)
         return user
+
+    @staticmethod
+    async def verify_user_email(db: AsyncSession, token: str) -> bool:
+        """Verify user email using token from Redis"""
+        from app.database.redis import get_redis
+        from app.utils.security import hash_token
+        
+        hashed_token = hash_token(token)
+        redis = await get_redis()
+        user_id_str = await redis.get(f"verify_token:{hashed_token}")
+        
+        if not user_id_str:
+            return False
+            
+        user_id = uuid.UUID(user_id_str)
+        user = await db.get(User, user_id)
+        
+        if not user:
+            return False
+            
+        user.is_email_verified = True
+        await db.commit()
+        await redis.delete(f"verify_token:{hashed_token}")
+        return True
+
+

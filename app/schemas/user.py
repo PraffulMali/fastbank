@@ -96,6 +96,7 @@ class UserListResponse(BaseModel):
     role: str
     tenant_id: Optional[uuid.UUID]
     is_active: bool
+    is_email_verified: bool
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
@@ -111,6 +112,7 @@ class UserDetailResponse(BaseModel):
     role: str
     tenant_id: Optional[uuid.UUID]
     is_active: bool
+    is_email_verified: bool
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
@@ -126,6 +128,7 @@ class UserSelfResponse(BaseModel):
     full_name: str
     role: str
     tenant_id: Optional[uuid.UUID]
+    is_email_verified: bool
     created_at: datetime
     updated_at: datetime
     user_identity: Optional[UserIdentityResponse] = None

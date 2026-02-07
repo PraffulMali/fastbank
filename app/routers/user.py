@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.config.settings import settings
+from app.utils.email import send_verification_email
 from app.models.user import User
 from app.models.enums import UserRole
 from app.schemas.user import (
@@ -22,18 +24,6 @@ router = APIRouter(
     prefix="/users",
     tags=["Users"]
 )
-
-
-# TODO: Implement email sending function
-async def send_verification_email(email: str, token: str):
-    """
-    Placeholder for sending verification email.
-    Should store token in Redis with TTL and send email asynchronously.
-    """
-    # Store in Redis: await redis.setex(f"verify:{token}", 900, user_id)
-    # Send email with verification link
-    print(f"Sending verification email to {email} with token {token}")
-
 
 @router.post("/", response_model=UserListResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
@@ -57,16 +47,6 @@ async def create_user(
                 )
             new_user, token, temp_password = await UserService.create_user_by_super_admin(db, user_in)
             
-            # Print credentials to terminal for testing
-            print("\n" + "="*60)
-            print("🔐 NEW ADMIN USER CREATED")
-            print("="*60)
-            print(f"Email:    {new_user.email}")
-            print(f"Password: {temp_password}")
-            print(f"Role:     {new_user.role}")
-            print(f"Tenant:   {new_user.tenant_id}")
-            print("="*60 + "\n")
-            
         else:  # ADMIN
             # Validate that the input is UserCreateByAdmin
             if isinstance(user_in, UserCreateBySuperAdmin):
@@ -77,19 +57,15 @@ async def create_user(
             new_user, token, temp_password = await UserService.create_user_by_admin(
                 db, user_in, current_user.tenant_id, current_user.id
             )
-            
-            # Print credentials to terminal for testing
-            print("\n" + "="*60)
-            print("🔐 NEW USER CREATED")
-            print("="*60)
-            print(f"Email:    {new_user.email}")
-            print(f"Password: {temp_password}")
-            print(f"Role:     {new_user.role}")
-            print(f"Tenant:   {new_user.tenant_id}")
-            print("="*60 + "\n")
         
-        # Send verification email asynchronously (currently just prints)
-        background_tasks.add_task(send_verification_email, new_user.email, token)
+        # Send verification email asynchronously
+        background_tasks.add_task(
+            send_verification_email, 
+            new_user.email, 
+            token, 
+            temp_password, 
+            str(new_user.id)
+        )
         
         return new_user
     except ValueError as e:

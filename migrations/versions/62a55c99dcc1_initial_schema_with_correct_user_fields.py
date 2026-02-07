@@ -1,8 +1,8 @@
-"""initial user tenant identity schema
+"""initial schema with correct user fields
 
-Revision ID: 7df4d82f65f7
+Revision ID: 62a55c99dcc1
 Revises: 
-Create Date: 2026-02-06 12:52:08.830811
+Create Date: 2026-02-07 15:04:58.571496
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '7df4d82f65f7'
+revision: str = '62a55c99dcc1'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -34,8 +34,9 @@ def upgrade() -> None:
     op.create_table('users',
     sa.Column('tenant_id', sa.UUID(), nullable=True),
     sa.Column('email', sa.String(length=255), nullable=False),
-    sa.Column('password_hash', sa.String(length=255), nullable=False),
+    sa.Column('password', sa.String(length=255), nullable=False),
     sa.Column('full_name', sa.String(length=255), nullable=False),
+    sa.Column('is_email_verified', sa.Boolean(), nullable=False),
     sa.Column('role', sa.Enum('SUPER_ADMIN', 'ADMIN', 'STAFF', 'USER', name='user_role_enum', create_constraint=True), nullable=False),
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),

@@ -27,8 +27,9 @@ class User(BaseModel):
     )
     
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    password: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_email_verified: Mapped[bool] = mapped_column(default=False)
     
     role: Mapped[UserRole] = mapped_column(
         SQLEnum(UserRole, name="user_role_enum", create_constraint=True),
