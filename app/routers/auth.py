@@ -1,5 +1,5 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -9,10 +9,14 @@ from app.schemas.auth import (
     ChangePasswordRequest,
     TokenRefreshRequest,
     TokenRefreshResponse,
-    UserLogoutRequest
+    UserLogoutRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    ResendVerificationRequest
 )
 from app.services.user_service import UserService
 from app.dependencies import get_current_user, security
+from app.utils.email import send_password_reset_email, send_verification_resend_email
 from fastapi.security import HTTPAuthorizationCredentials
 from app.models.user import User
 
@@ -183,3 +187,79 @@ async def verify_email(
             detail="Invalid or expired verification token"
         )
     return {"message": "Email verified successfully"}
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+async def forgot_password(
+    request_data: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Forgot password endpoint - sends password reset email if user is active and email is verified.
+    Always returns success to avoid revealing if user exists.
+    """
+    result = await UserService.request_password_reset(db, request_data.email)
+    
+    if result:
+        user, reset_token = result
+        # Send password reset email asynchronously
+        background_tasks.add_task(
+            send_password_reset_email,
+            user.email,
+            reset_token,
+            str(user.id)
+        )
+    
+    # Always return success to avoid user enumeration
+    return {"message": "If your email is registered and verified, you will receive a password reset link"}
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+async def reset_password(
+    token: str,
+    reset_data: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Reset password endpoint - uses token from email (query param) to reset password
+    """
+    success = await UserService.reset_password_with_token(
+        db,
+        token,
+        reset_data.new_password
+    )
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    return {"message": "Password has been reset successfully"}
+
+
+@router.post("/resend-verification", status_code=status.HTTP_200_OK)
+async def resend_verification(
+    request_data: ResendVerificationRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Resend verification email endpoint - sends new verification email if user exists and email is not verified.
+    Always returns success to avoid revealing if user exists.
+    """
+    result = await UserService.resend_verification_email(db, request_data.email)
+    
+    if result:
+        user, verification_token = result
+        # Send verification email asynchronously
+        background_tasks.add_task(
+            send_verification_resend_email,
+            user.email,
+            verification_token,
+            str(user.id)
+        )
+    
+    # Always return success to avoid user enumeration
+    return {"message": "If your email is registered and unverified, you will receive a new verification link"}

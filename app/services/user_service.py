@@ -377,9 +377,12 @@ class UserService:
             
         user.is_email_verified = True
         await db.commit()
+        
+        # Delete the token after successful verification
         await redis.delete(f"verify_token:{hashed_token}")
         return True
 
+        
     @staticmethod
     async def logout_user(jti: str, exp: int) -> bool:
         """
@@ -404,3 +407,90 @@ class UserService:
             )
         
         return True
+
+    @staticmethod
+    async def request_password_reset(db: AsyncSession, email: str) -> Optional[tuple[User, str]]:
+        """
+        Request password reset - sends email only if user is active and email is verified.
+        Returns: (User, reset_token) or None if user doesn't meet criteria
+        """
+        query = select(User).where(User.email == email)
+        result = await db.execute(query)
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            # Don't reveal if user exists or not
+            return None
+        
+        if not user.is_active:
+            # Don't reveal if user is inactive
+            return None
+        
+        if not user.is_email_verified:
+            # Don't reveal if email is not verified
+            return None
+        
+        # Generate reset token
+        reset_token = secrets.token_urlsafe(32)
+        
+        return user, reset_token
+
+
+    @staticmethod
+    async def reset_password_with_token(db: AsyncSession, token: str, new_password: str) -> bool:
+        """
+        Reset password using the token from Redis.
+        Returns True if successful, False otherwise.
+        """
+        from app.database.redis import get_redis
+        from app.utils.security import hash_token
+        
+        hashed_token = hash_token(token)
+        redis = await get_redis()
+        user_id_str = await redis.get(f"reset_token:{hashed_token}")
+        
+        if not user_id_str:
+            return False
+        
+        user_id = uuid.UUID(user_id_str)
+        user = await db.get(User, user_id)
+        
+        if not user:
+            return False
+        
+        # Update password
+        user.password = get_password_hash(new_password)
+        await db.commit()
+        
+        # Delete the token after successful password reset
+        await redis.delete(f"reset_token:{hashed_token}")
+        
+        return True
+
+
+    @staticmethod
+    async def resend_verification_email(db: AsyncSession, email: str) -> Optional[tuple[User, str]]:
+        """
+        Resend verification email - only if user exists and email is not verified.
+        Returns: (User, verification_token) or None if user doesn't meet criteria
+        """
+        query = select(User).where(User.email == email)
+        result = await db.execute(query)
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            # Don't reveal if user exists
+            return None
+        
+        if user.is_email_verified:
+            # Email already verified
+            return None
+        
+        if not user.is_active:
+            # User is inactive
+            return None
+        
+        # Generate new verification token
+        verification_token = secrets.token_urlsafe(32)
+        
+        return user, verification_token
