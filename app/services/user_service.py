@@ -3,13 +3,15 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from jose import JWTError, jwt
 
 from app.models.user import User
 from app.models.enums import UserRole
 from app.schemas.user import UserCreateBySuperAdmin, UserCreateByAdmin, UserUpdate
-from app.schemas.auth import UserLoginRequest, UserLoginResponse
+from app.schemas.auth import UserLoginRequest, UserLoginResponse, TokenRefreshResponse
 from app.utils.security import get_password_hash, verify_password
 from app.utils.jwt import create_access_token, create_refresh_token
+from app.config.settings import settings
 import secrets
 
 
@@ -35,13 +37,111 @@ class UserService:
             "tenant_id": str(user.tenant_id) if user.tenant_id else None
         }
         
-        access_token = create_access_token(token_data)
-        refresh_token = create_refresh_token(token_data)
+        access_token, access_jti, access_exp = create_access_token(token_data)
+        refresh_token = create_refresh_token(token_data, access_jti=access_jti, access_exp=access_exp)
         
         return UserLoginResponse(
             access_token=access_token,
             refresh_token=refresh_token
         )
+
+    @staticmethod
+    async def change_password(
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        old_password: str,
+        new_password: str
+    ) -> bool:
+        """Change user password"""
+        user = await db.get(User, user_id)
+        if not user:
+            raise ValueError("User not found")
+        
+        # Verify old password
+        if not verify_password(old_password, user.password):
+            raise ValueError("Invalid old password")
+        
+        # Update password
+        user.password = get_password_hash(new_password)
+        await db.commit()
+        
+        return True
+
+    @staticmethod
+    async def refresh_token(
+        refresh_token: str, 
+        db: AsyncSession,
+        access_token_jti: Optional[str] = None,
+        access_token_exp: Optional[int] = None
+    ) -> TokenRefreshResponse:
+        """Refresh access token using refresh token"""
+        from app.database.redis import get_redis
+        try:
+            # Decode refresh token
+            payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            
+            # Validate token type
+            if payload.get("token_type") != "refresh":
+                raise ValueError("Invalid token type")
+            
+            refresh_jti = payload.get("jti")
+            refresh_exp = payload.get("exp")
+            
+            if not refresh_jti or not refresh_exp:
+                raise ValueError("Invalid token payload")
+            
+            # Check if refresh token is blacklisted
+            redis = await get_redis()
+            is_blacklisted = await redis.get(f"blacklist:token:{refresh_jti}")
+            if is_blacklisted:
+                raise ValueError("Token has been invalidated. Please login again.")
+            
+            # Get user ID from token
+            user_id_str = payload.get("sub")
+            if not user_id_str:
+                raise ValueError("Invalid token payload")
+            
+            user_id = uuid.UUID(user_id_str)
+            
+            # Verify user still exists and is active
+            user = await db.get(User, user_id)
+            if not user:
+                raise ValueError("User not found")
+            
+            if not user.is_active:
+                raise ValueError("User account is inactive")
+            
+            # Create new token pair
+            token_data = {
+                "sub": str(user.id),
+                "role": user.role.value,
+                "tenant_id": str(user.tenant_id) if user.tenant_id else None
+            }
+            
+            new_access_token, new_access_jti, new_access_exp = create_access_token(token_data)
+            new_refresh_token = create_refresh_token(
+                token_data, 
+                access_jti=new_access_jti, 
+                access_exp=new_access_exp
+            )
+            
+            # Blacklist the old refresh token
+            await UserService.logout_user(refresh_jti, refresh_exp)
+            
+            # Blacklist the old access token if provided in header
+            if access_token_jti and access_token_exp:
+                await UserService.logout_user(access_token_jti, access_token_exp)
+            elif payload.get("access_jti") and payload.get("access_exp"):
+                # Blacklist the access token linked to this refresh token (from payload)
+                await UserService.logout_user(payload.get("access_jti"), payload.get("access_exp"))
+            
+            return TokenRefreshResponse(
+                access_token=new_access_token,
+                refresh_token=new_refresh_token
+            )
+            
+        except JWTError:
+            raise ValueError("Invalid or expired refresh token")
 
     @staticmethod
     async def create_user_by_super_admin(
@@ -78,7 +178,7 @@ class UserService:
             password=get_password_hash(temp_password),
             role=UserRole.ADMIN,
             tenant_id=user_in.tenant_id,
-            is_active=True  # Set to True for testing, should be False in production
+            is_active=True
         )
         
         db.add(new_user)
@@ -139,11 +239,11 @@ class UserService:
             password=get_password_hash(temp_password),
             role=UserRole.USER,
             tenant_id=admin_tenant_id,
-            is_active=True  # Set to True for testing, should be False in production
+            is_active=True
         )
         
         db.add(new_user)
-        await db.flush()  # Flush to get user.id
+        await db.flush()
         
         # Create UserIdentity with verification info
         user_identity = UserIdentity(
@@ -158,8 +258,8 @@ class UserService:
             state=user_in.state,
             postal_code=user_in.postal_code,
             country=user_in.country,
-            verified_by=admin_user_id,  # Admin who created the user
-            verified_at=datetime.now(timezone.utc)  # Verified at creation time
+            verified_by=admin_user_id,
+            verified_at=datetime.now(timezone.utc)
         )
         
         db.add(user_identity)
@@ -280,4 +380,27 @@ class UserService:
         await redis.delete(f"verify_token:{hashed_token}")
         return True
 
-
+    @staticmethod
+    async def logout_user(jti: str, exp: int) -> bool:
+        """
+        Logout user by storing token jti in Redis blacklist
+        The blacklist entry will expire when the token itself expires
+        """
+        from app.database.redis import get_redis
+        import time
+        
+        redis = await get_redis()
+        
+        # Calculate remaining time for the token
+        current_time = int(time.time())
+        ttl = exp - current_time
+        
+        if ttl > 0:
+            blacklist_key = f"blacklist:token:{jti}"
+            await redis.setex(
+                blacklist_key,
+                ttl,
+                "logged_out"
+            )
+        
+        return True
