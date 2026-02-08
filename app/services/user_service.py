@@ -263,6 +263,19 @@ class UserService:
         )
         
         db.add(user_identity)
+        
+        # Create bank account for the user
+        from app.services.account_service import AccountService
+        from app.schemas.account import AccountCreateByAdmin
+        
+        account_in = AccountCreateByAdmin(
+            user_id=new_user.id,
+            account_type=user_in.account_type
+        )
+        await AccountService.create_account(
+            db, account_in, new_user.id, admin_tenant_id
+        )
+        
         await db.commit()
         await db.refresh(new_user)
         
