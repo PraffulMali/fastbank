@@ -105,3 +105,25 @@ async def require_admin(
             detail="This operation requires ADMIN privileges"
         )
     return current_user
+
+
+async def require_tenant_admin(
+    current_user: Annotated[User, Depends(get_current_user)]
+) -> User:
+    """
+    Dependency to require ADMIN role (NOT SUPER_ADMIN).
+    Used for account operations where SUPER_ADMIN should be blocked.
+    """
+    if current_user.role == UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SUPER_ADMIN cannot access account operations"
+        )
+    
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This operation requires ADMIN privileges"
+        )
+    
+    return current_user

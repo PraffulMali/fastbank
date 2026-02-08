@@ -14,6 +14,8 @@ from app.models.enums import UserRole
 if TYPE_CHECKING:
     from app.models.tenant import Tenant
     from app.models.user_identity import UserIdentity
+    from app.models.account import Account
+
 
 
 class User(BaseModel):
@@ -52,6 +54,14 @@ class User(BaseModel):
         lazy="selectin",
         foreign_keys="UserIdentity.user_id"
     )
+    
+    accounts: Mapped[list["Account"]] = relationship(
+        "Account",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+
     
     __table_args__ = (
         CheckConstraint(
