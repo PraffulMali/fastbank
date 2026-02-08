@@ -6,6 +6,8 @@ from app.models.base import BaseModel
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.user_identity import UserIdentity
+    from app.models.account import Account
+
 
 
 class Tenant(BaseModel):
@@ -22,6 +24,13 @@ class Tenant(BaseModel):
     
     user_identities: Mapped[list["UserIdentity"]] = relationship(
         "UserIdentity",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+    
+    accounts: Mapped[list["Account"]] = relationship(
+        "Account",
         back_populates="tenant",
         cascade="all, delete-orphan",
         lazy="selectin"
