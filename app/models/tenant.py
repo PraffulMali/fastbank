@@ -7,8 +7,7 @@ if TYPE_CHECKING:
     from app.models.user import User
     from app.models.user_identity import UserIdentity
     from app.models.account import Account
-
-
+    from app.models.transaction import Transaction  
 
 class Tenant(BaseModel):
     __tablename__ = "tenants"
@@ -31,6 +30,13 @@ class Tenant(BaseModel):
     
     accounts: Mapped[list["Account"]] = relationship(
         "Account",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+    
+    transactions: Mapped[list["Transaction"]] = relationship(
+        "Transaction",
         back_populates="tenant",
         cascade="all, delete-orphan",
         lazy="selectin"
