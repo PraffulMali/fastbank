@@ -11,3 +11,20 @@ class UserRole(str, Enum):
 class AccountType(str, Enum):
     SAVINGS = "SAVINGS"
     CURRENT = "CURRENT"
+
+
+class TransactionType(str, Enum):
+    DEBIT = "DEBIT"
+    CREDIT = "CREDIT"
+
+
+class TransactionStatus(str, Enum):
+    PENDING = "PENDING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+
+
+class ReferenceType(str, Enum):
+    TRANSFER = "TRANSFER"  
+    LOAN = "LOAN"          
+    SYSTEM = "SYSTEM"     

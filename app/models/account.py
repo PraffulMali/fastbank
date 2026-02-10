@@ -17,7 +17,7 @@ from app.models.enums import AccountType
 if TYPE_CHECKING:
     from app.models.tenant import Tenant
     from app.models.user import User
-
+    from app.models.transaction import Transaction 
 
 class Account(BaseModel):
     __tablename__ = "accounts"
@@ -74,9 +74,15 @@ class Account(BaseModel):
         lazy="selectin"
     )
     
+    transactions: Mapped[list["Transaction"]] = relationship(
+        "Transaction",
+        back_populates="account",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+    
     __table_args__ = (
         CheckConstraint("balance >= 0", name="check_balance_non_negative"),
-        
         Index("ix_accounts_tenant_user_type", "tenant_id", "user_id", "account_type", unique=True),
     )
     
