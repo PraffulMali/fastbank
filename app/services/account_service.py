@@ -8,8 +8,13 @@ import random
 import string
 
 from app.models.account import Account
-from app.models.enums import AccountType
-from app.schemas.account import AccountCreateByAdmin, AccountUpdate
+from app.models.user import User
+from app.models.enums import AccountType, UserRole
+from app.schemas.account import (
+    AccountCreateByAdmin, 
+    AccountUpdate,
+    AccountUserSingleResponse
+)
 
 
 class AccountService:
@@ -35,9 +40,7 @@ class AccountService:
         - Generates unique account number
         - Validates user doesn't already have account of this type
         - Validates user exists in the same tenant
-        """
-        from app.models.user import User
-        
+        """        
         # Validate user exists and belongs to the same tenant
         user = await db.get(User, user_id)
         if not user:
@@ -141,20 +144,81 @@ class AccountService:
         result = await db.execute(query)
         return list(result.scalars().all())
     
+
     @staticmethod
-    async def list_tenant_accounts(
+    def get_accounts_query(tenant_id: uuid.UUID):
+        """Get base query for listing accounts in a tenant"""
+        return select(Account).where(Account.tenant_id == tenant_id)
+
+    @staticmethod
+    async def get_my_accounts(
         db: AsyncSession,
-        tenant_id: uuid.UUID,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Account]:
-        """List all accounts in a tenant (for admins)"""
-        query = select(Account).where(
-            Account.tenant_id == tenant_id
-        ).offset(skip).limit(limit)
+        current_user: User
+    ):
+        """Get accounts for the current regular user"""
+        if current_user.role != UserRole.USER:
+            raise PermissionError("Only regular users can access this endpoint. Admins don't have accounts.")
         
-        result = await db.execute(query)
-        return list(result.scalars().all())
+        if not current_user.tenant_id:
+            raise PermissionError("User must belong to a tenant")
+        
+        accounts = await AccountService.list_user_accounts(
+            db,
+            current_user.id,
+            current_user.tenant_id,
+            include_inactive=False
+        )
+        
+        return {"accounts": [AccountUserSingleResponse.model_validate(acc) for acc in accounts]}
+
+    @staticmethod
+    async def get_account_with_permissions(
+        db: AsyncSession,
+        account_id: uuid.UUID,
+        tenant_id: uuid.UUID
+    ) -> Account:
+        """Retrieve account and validate tenant ownership"""
+        account = await AccountService.get_account_by_id(db, account_id)
+        if not account:
+            raise ValueError("Account not found")
+        
+        if account.tenant_id != tenant_id:
+            raise PermissionError("Cannot view account from different tenant")
+        
+        return account
+
+    @staticmethod
+    async def update_account_with_permissions(
+        db: AsyncSession,
+        account_id: uuid.UUID,
+        account_update: AccountUpdate,
+        tenant_id: uuid.UUID
+    ) -> Account:
+        """Update account and validate tenant ownership"""
+        account = await AccountService.get_account_by_id(db, account_id)
+        if not account:
+            raise ValueError("Account not found")
+        
+        if account.tenant_id != tenant_id:
+            raise PermissionError("Cannot update account from different tenant")
+        
+        return await AccountService.update_account(db, account_id, account_update)
+
+    @staticmethod
+    async def soft_delete_account_with_permissions(
+        db: AsyncSession,
+        account_id: uuid.UUID,
+        tenant_id: uuid.UUID
+    ):
+        """Soft delete account and validate tenant ownership"""
+        account = await AccountService.get_account_by_id(db, account_id)
+        if not account:
+            raise ValueError("Account not found")
+        
+        if account.tenant_id != tenant_id:
+            raise PermissionError("Cannot delete account from different tenant")
+        
+        return await AccountService.soft_delete_account(db, account_id)
     
     @staticmethod
     async def update_account(

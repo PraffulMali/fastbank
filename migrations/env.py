@@ -1,3 +1,4 @@
+import asyncio
 from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
@@ -55,7 +56,6 @@ async def run_async_migrations() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode with async support."""
-    import asyncio
     asyncio.run(run_async_migrations())
 
 

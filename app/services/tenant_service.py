@@ -28,14 +28,9 @@ class TenantService:
         return await db.get(Tenant, tenant_id)
 
     @staticmethod
-    async def list_tenants(
-        db: AsyncSession, 
-        skip: int = 0, 
-        limit: int = 100
-    ) -> List[Tenant]:
-        query = select(Tenant).offset(skip).limit(limit)
-        result = await db.execute(query)
-        return result.scalars().all()
+    def get_tenants_query():
+        """Get base query for listing tenants"""
+        return select(Tenant)
 
     @staticmethod
     async def update_tenant(

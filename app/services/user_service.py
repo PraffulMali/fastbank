@@ -1,18 +1,31 @@
-from typing import Optional, List
+from typing import Optional, List, Union
 import uuid
+import secrets
+import time
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 from jose import JWTError, jwt
 
 from app.models.user import User
+from app.models.tenant import Tenant
+from app.models.user_identity import UserIdentity
 from app.models.enums import UserRole
-from app.schemas.user import UserCreateBySuperAdmin, UserCreateByAdmin, UserUpdate
+from app.schemas.user import (
+    UserCreateBySuperAdmin, 
+    UserCreateByAdmin, 
+    UserUpdate,
+    UserDetailResponse,
+    UserSelfResponse
+)
 from app.schemas.auth import UserLoginRequest, UserLoginResponse, TokenRefreshResponse
-from app.utils.security import get_password_hash, verify_password
+from app.utils.security import get_password_hash, verify_password, hash_token
 from app.utils.jwt import create_access_token, create_refresh_token
 from app.config.settings import settings
-import secrets
+from app.database.redis import get_redis
+from app.services.account_service import AccountService
+from app.schemas.account import AccountCreateByAdmin
 
 
 class UserService:
@@ -30,6 +43,9 @@ class UserService:
             
         if not user.is_active:
             raise ValueError("User account is inactive")
+            
+        if not user.is_email_verified:
+            raise ValueError("Email not verified. Please verify your email to login.")
             
         token_data = {
             "sub": str(user.id),
@@ -75,7 +91,6 @@ class UserService:
         access_token_exp: Optional[int] = None
     ) -> TokenRefreshResponse:
         """Refresh access token using refresh token"""
-        from app.database.redis import get_redis
         try:
             # Decode refresh token
             payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
@@ -110,6 +125,9 @@ class UserService:
             
             if not user.is_active:
                 raise ValueError("User account is inactive")
+            
+            if not user.is_email_verified:
+                raise ValueError("Email not verified. Please verify your email to login.")
             
             # Create new token pair
             token_data = {
@@ -153,7 +171,6 @@ class UserService:
         Returns: (User, verification_token, temp_password)
         """
         # Validate tenant exists and is active
-        from app.models.tenant import Tenant
         tenant = await db.get(Tenant, user_in.tenant_id)
         if not tenant:
             raise ValueError("Tenant not found")
@@ -205,7 +222,6 @@ class UserService:
             raise ValueError("Email already exists")
         
         # Check for duplicate phone number in tenant
-        from app.models.user_identity import UserIdentity
         phone_query = select(UserIdentity).where(
             and_(
                 UserIdentity.phone_number == user_in.phone_number,
@@ -264,10 +280,8 @@ class UserService:
         
         db.add(user_identity)
         
-        # Create bank account for the user
-        from app.services.account_service import AccountService
-        from app.schemas.account import AccountCreateByAdmin
         
+        # Create bank account for the user
         account_in = AccountCreateByAdmin(
             user_id=new_user.id,
             account_type=user_in.account_type
@@ -282,33 +296,34 @@ class UserService:
         return new_user, verification_token, temp_password
 
     @staticmethod
-    async def list_users_for_super_admin(
+    async def create_user(
         db: AsyncSession,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[User]:
-        """List all ADMIN users across all tenants"""
-        query = select(User).where(
-            User.role == UserRole.ADMIN
-        ).offset(skip).limit(limit)
+        user_in: Union[UserCreateBySuperAdmin, UserCreateByAdmin],
+        current_user: User
+    ) -> tuple[User, str, str]:
+        """Unified user creation handling role-based branching"""
+        if current_user.role == UserRole.SUPER_ADMIN:
+            if not isinstance(user_in, UserCreateBySuperAdmin):
+                raise ValueError("SUPER_ADMIN must provide tenant_id")
+            return await UserService.create_user_by_super_admin(db, user_in)
         
-        result = await db.execute(query)
-        return list(result.scalars().all())
+        elif current_user.role == UserRole.ADMIN:
+            if isinstance(user_in, UserCreateBySuperAdmin):
+                raise ValueError("ADMIN cannot specify tenant_id")
+            return await UserService.create_user_by_admin(
+                db, user_in, current_user.tenant_id, current_user.id
+            )
+        else:
+            raise ValueError("Unauthorized to create users")
+
 
     @staticmethod
-    async def list_users_for_admin(
-        db: AsyncSession,
-        tenant_id: uuid.UUID,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[User]:
-        """List all users within a specific tenant"""
-        query = select(User).where(
-            User.tenant_id == tenant_id
-        ).offset(skip).limit(limit)
-        
-        result = await db.execute(query)
-        return list(result.scalars().all())
+    def get_users_query(current_user: User):
+        """Get base query for listing users based on current user's role"""
+        if current_user.role == UserRole.SUPER_ADMIN:
+            return select(User).where(User.role == UserRole.ADMIN)
+        else:  # ADMIN
+            return select(User).where(User.tenant_id == current_user.tenant_id)
 
     @staticmethod
     async def get_user_by_id(
@@ -316,13 +331,38 @@ class UserService:
         user_id: uuid.UUID
     ) -> Optional[User]:
         """Get user by ID with user_identity eagerly loaded"""
-        from sqlalchemy.orm import selectinload
         
         query = select(User).where(User.id == user_id).options(
             selectinload(User.user_identity)
         )
         result = await db.execute(query)
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_user_with_permissions(
+        db: AsyncSession, 
+        user_id: uuid.UUID, 
+        current_user: User
+    ) -> Union[UserDetailResponse, UserSelfResponse]:
+        """Retrieve user and validate permissions based on role"""
+        user = await UserService.get_user_by_id(db, user_id)
+        if not user:
+            raise ValueError("User not found")
+        
+        if current_user.role == UserRole.SUPER_ADMIN:
+            if user.role != UserRole.ADMIN:
+                raise PermissionError("SUPER_ADMIN can only view ADMIN users")
+            return UserDetailResponse.model_validate(user)
+        
+        elif current_user.role == UserRole.ADMIN:
+            if user.tenant_id != current_user.tenant_id:
+                raise PermissionError("Cannot view users from other tenants")
+            return UserDetailResponse.model_validate(user)
+        
+        else:  # USER
+            if user.id != current_user.id:
+                raise PermissionError("You can only view your own profile")
+            return UserSelfResponse.model_validate(user)
 
     @staticmethod
     async def update_user(
@@ -350,6 +390,47 @@ class UserService:
         return user
 
     @staticmethod
+    async def update_user_with_permissions(
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        user_update: UserUpdate,
+        current_user: User
+    ) -> User:
+        """Update user with role-based permission checks"""
+        user = await UserService.get_user_by_id(db, user_id)
+        if not user:
+            raise ValueError("User not found")
+        
+        if current_user.role == UserRole.SUPER_ADMIN:
+            if user.role != UserRole.ADMIN:
+                raise PermissionError("SUPER_ADMIN can only update ADMIN users")
+        else: # ADMIN
+            if user.tenant_id != current_user.tenant_id:
+                raise PermissionError("Cannot update users from other tenants")
+        
+        return await UserService.update_user(db, user_id, user_update)
+
+    @staticmethod
+    async def soft_delete_user_with_permissions(
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        current_user: User
+    ):
+        """Soft delete user with role-based permission checks"""
+        user = await UserService.get_user_by_id(db, user_id)
+        if not user:
+            raise ValueError("User not found")
+        
+        if current_user.role == UserRole.SUPER_ADMIN:
+            if user.role != UserRole.ADMIN:
+                raise PermissionError("SUPER_ADMIN can only delete ADMIN users")
+        else: # ADMIN
+            if user.tenant_id != current_user.tenant_id:
+                raise PermissionError("Cannot delete users from other tenants")
+        
+        return await UserService.soft_delete_user(db, user_id)
+
+    @staticmethod
     async def soft_delete_user(
         db: AsyncSession,
         user_id: uuid.UUID
@@ -372,8 +453,6 @@ class UserService:
     @staticmethod
     async def verify_user_email(db: AsyncSession, token: str) -> bool:
         """Verify user email using token from Redis"""
-        from app.database.redis import get_redis
-        from app.utils.security import hash_token
         
         hashed_token = hash_token(token)
         redis = await get_redis()
@@ -397,13 +476,26 @@ class UserService:
 
         
     @staticmethod
+    async def blacklist_token(token: str) -> bool:
+        """Decode token and blacklist its jti"""
+        from jose import jwt, JWTError
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            jti = payload.get("jti")
+            exp = payload.get("exp")
+            
+            if jti and exp:
+                return await UserService.logout_user(jti, exp)
+        except JWTError:
+            pass
+        return False
+
+    @staticmethod
     async def logout_user(jti: str, exp: int) -> bool:
         """
         Logout user by storing token jti in Redis blacklist
         The blacklist entry will expire when the token itself expires
         """
-        from app.database.redis import get_redis
-        import time
         
         redis = await get_redis()
         
@@ -455,8 +547,6 @@ class UserService:
         Reset password using the token from Redis.
         Returns True if successful, False otherwise.
         """
-        from app.database.redis import get_redis
-        from app.utils.security import hash_token
         
         hashed_token = hash_token(token)
         redis = await get_redis()

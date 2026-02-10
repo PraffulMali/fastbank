@@ -60,10 +60,7 @@ async def list_accounts(
     - ADMIN: Can list all accounts in their tenant
     - SUPER_ADMIN: Cannot access this endpoint
     """
-    from sqlalchemy import select
-    from app.models.account import Account
-    
-    query = select(Account).where(Account.tenant_id == current_user.tenant_id)
+    query = AccountService.get_accounts_query(current_user.tenant_id)
     return await paginator.paginate(db, query)
 
 
@@ -78,31 +75,13 @@ async def get_my_accounts(
     - ADMIN: Cannot access this endpoint (admins don't have accounts)
     - SUPER_ADMIN: Cannot access this endpoint
     """
-    # Only regular users can access this endpoint
-    if current_user.role != UserRole.USER:
+    try:
+        return await AccountService.get_my_accounts(db, current_user)
+    except PermissionError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only regular users can access this endpoint. Admins don't have accounts."
+            detail=str(e)
         )
-    
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User must belong to a tenant"
-        )
-    
-    accounts = await AccountService.list_user_accounts(
-        db,
-        current_user.id,
-        current_user.tenant_id,
-        include_inactive=False
-    )
-    
-    # Convert Account objects to AccountUserSingleResponse (without is_active and deleted_at)
-    from app.schemas.account import AccountUserSingleResponse
-    account_responses = [AccountUserSingleResponse.model_validate(acc) for acc in accounts]
-    
-    return {"accounts": account_responses}
 
 
 @router.get("/{account_id}", response_model=AccountResponse)
@@ -116,21 +95,20 @@ async def get_account(
     - ADMIN: Can view any account in their tenant
     - SUPER_ADMIN: Cannot access this endpoint
     """
-    account = await AccountService.get_account_by_id(db, account_id)
-    if not account:
+    try:
+        return await AccountService.get_account_with_permissions(
+            db, account_id, current_user.tenant_id
+        )
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Account not found"
+            detail=str(e)
         )
-    
-    # Check if account belongs to admin's tenant
-    if account.tenant_id != current_user.tenant_id:
+    except PermissionError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot view account from different tenant"
+            detail=str(e)
         )
-    
-    return account
 
 
 @router.patch("/{account_id}", response_model=AccountResponse)
@@ -146,23 +124,21 @@ async def update_account(
     - Only is_active can be updated (to restore deleted accounts)
     - SUPER_ADMIN: Cannot access this endpoint
     """
-    account = await AccountService.get_account_by_id(db, account_id)
-    if not account:
+    try:
+        return await AccountService.update_account_with_permissions(
+            db, account_id, account_update, current_user.tenant_id
+        )
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Account not found"
+            detail=str(e)
         )
-    
-    if account.tenant_id != current_user.tenant_id:
+    except PermissionError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot update account from different tenant"
+            detail=str(e)
         )
-    
-    try:
-        updated_account = await AccountService.update_account(db, account_id, account_update)
-        return updated_account
-    except ValueError as e:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
@@ -181,22 +157,21 @@ async def delete_account(
     - Sets is_active to False and deleted_at to current timestamp
     - SUPER_ADMIN: Cannot access this endpoint
     """
-    account = await AccountService.get_account_by_id(db, account_id)
-    if not account:
+    try:
+        await AccountService.soft_delete_account_with_permissions(
+            db, account_id, current_user.tenant_id
+        )
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Account not found"
+            detail=str(e)
         )
-    
-    if account.tenant_id != current_user.tenant_id:
+    except PermissionError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot delete account from different tenant"
+            detail=str(e)
         )
-    
-    try:
-        await AccountService.soft_delete_account(db, account_id)
-    except ValueError as e:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
