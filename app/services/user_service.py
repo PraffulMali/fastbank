@@ -4,9 +4,11 @@ import secrets
 import time
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.orm import selectinload
 from jose import JWTError, jwt
+
+from app.utils.pagination import Paginator, Page
 
 from app.models.user import User
 from app.models.tenant import Tenant
@@ -324,6 +326,16 @@ class UserService:
             return select(User).where(User.role == UserRole.ADMIN)
         else:  # ADMIN
             return select(User).where(User.tenant_id == current_user.tenant_id)
+
+    @staticmethod
+    async def list_users(
+        db: AsyncSession,
+        current_user: User,
+        paginator: Paginator
+    ) -> Page:
+        """List users with pagination, centralizing query construction in service layer"""
+        query = UserService.get_users_query(current_user)
+        return await paginator.paginate(db, query)
 
     @staticmethod
     async def get_user_by_id(

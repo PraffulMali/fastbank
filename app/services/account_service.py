@@ -10,6 +10,7 @@ import string
 from app.models.account import Account
 from app.models.user import User
 from app.models.enums import AccountType, UserRole
+from app.utils.pagination import Paginator, Page
 from app.schemas.account import (
     AccountCreateByAdmin, 
     AccountUpdate,
@@ -107,21 +108,6 @@ class AccountService:
         """Get account by ID"""
         return await db.get(Account, account_id)
     
-    @staticmethod
-    async def get_account_by_number(
-        db: AsyncSession,
-        account_number: str,
-        tenant_id: uuid.UUID
-    ) -> Optional[Account]:
-        """Get account by account number within a tenant"""
-        query = select(Account).where(
-            and_(
-                Account.account_number == account_number,
-                Account.tenant_id == tenant_id
-            )
-        )
-        result = await db.execute(query)
-        return result.scalar_one_or_none()
     
     @staticmethod
     async def list_user_accounts(
@@ -149,6 +135,16 @@ class AccountService:
     def get_accounts_query(tenant_id: uuid.UUID):
         """Get base query for listing accounts in a tenant"""
         return select(Account).where(Account.tenant_id == tenant_id)
+
+    @staticmethod
+    async def list_accounts(
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        paginator: Paginator
+    ) -> Page:
+        """List accounts with pagination, centralizing query construction in service layer"""
+        query = AccountService.get_accounts_query(tenant_id)
+        return await paginator.paginate(db, query)
 
     @staticmethod
     async def get_my_accounts(
@@ -265,32 +261,3 @@ class AccountService:
         await db.commit()
         await db.refresh(account)
         return account
-    
-    @staticmethod
-    async def get_account_balance(
-        db: AsyncSession,
-        account_id: uuid.UUID
-    ) -> Optional[Decimal]:
-        """Get current balance of an account"""
-        account = await db.get(Account, account_id)
-        if not account:
-            return None
-        return account.balance
-    
-    @staticmethod
-    async def validate_account_ownership(
-        db: AsyncSession,
-        account_id: uuid.UUID,
-        user_id: uuid.UUID,
-        tenant_id: uuid.UUID
-    ) -> bool:
-        """Validate that an account belongs to a specific user in a tenant"""
-        query = select(Account).where(
-            and_(
-                Account.id == account_id,
-                Account.user_id == user_id,
-                Account.tenant_id == tenant_id
-            )
-        )
-        result = await db.execute(query)
-        return result.scalar_one_or_none() is not None

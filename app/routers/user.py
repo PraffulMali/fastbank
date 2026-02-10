@@ -68,8 +68,7 @@ async def list_users(
     - SUPER_ADMIN: Lists all ADMIN users across all tenants
     - ADMIN: Lists all users within their own tenant
     """
-    query = UserService.get_users_query(current_user)
-    return await paginator.paginate(db, query)
+    return await UserService.list_users(db, current_user, paginator)
 
 
 @router.get("/{user_id}", response_model=Union[UserDetailResponse, UserSelfResponse])

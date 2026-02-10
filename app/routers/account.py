@@ -60,8 +60,7 @@ async def list_accounts(
     - ADMIN: Can list all accounts in their tenant
     - SUPER_ADMIN: Cannot access this endpoint
     """
-    query = AccountService.get_accounts_query(current_user.tenant_id)
-    return await paginator.paginate(db, query)
+    return await AccountService.list_accounts(db, current_user.tenant_id, paginator)
 
 
 @router.get("/me", response_model=AccountUserResponse)
