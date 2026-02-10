@@ -38,25 +38,7 @@ async def create_user(
     - ADMIN: Can create USER users within their own tenant
     """
     try:
-        if current_user.role == UserRole.SUPER_ADMIN:
-            # Validate that the input is UserCreateBySuperAdmin
-            if not isinstance(user_in, UserCreateBySuperAdmin):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="SUPER_ADMIN must provide tenant_id"
-                )
-            new_user, token, temp_password = await UserService.create_user_by_super_admin(db, user_in)
-            
-        else:  # ADMIN
-            # Validate that the input is UserCreateByAdmin
-            if isinstance(user_in, UserCreateBySuperAdmin):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="ADMIN cannot specify tenant_id"
-                )
-            new_user, token, temp_password = await UserService.create_user_by_admin(
-                db, user_in, current_user.tenant_id, current_user.id
-            )
+        new_user, token, temp_password = await UserService.create_user(db, user_in, current_user)
         
         # Send verification email asynchronously
         background_tasks.add_task(
@@ -86,15 +68,7 @@ async def list_users(
     - SUPER_ADMIN: Lists all ADMIN users across all tenants
     - ADMIN: Lists all users within their own tenant
     """
-    from sqlalchemy import select
-    from app.models.user import User as UserModel
-    
-    if current_user.role == UserRole.SUPER_ADMIN:
-        query = select(UserModel).where(UserModel.role == UserRole.ADMIN)
-    else:  # ADMIN
-        query = select(UserModel).where(UserModel.tenant_id == current_user.tenant_id)
-    
-    return await paginator.paginate(db, query)
+    return await UserService.list_users(db, current_user, paginator)
 
 
 @router.get("/{user_id}", response_model=Union[UserDetailResponse, UserSelfResponse])
@@ -109,36 +83,18 @@ async def get_user(
     - ADMIN: Can view any user in their tenant
     - USER: Can only view their own profile (limited fields)
     """
-    user = await UserService.get_user_by_id(db, user_id)
-    if not user:
+    try:
+        return await UserService.get_user_with_permissions(db, user_id, current_user)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail=str(e)
         )
-    
-    if current_user.role == UserRole.SUPER_ADMIN:
-        if user.role != UserRole.ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="SUPER_ADMIN can only view ADMIN users"
-            )
-        return UserDetailResponse.model_validate(user)
-    
-    elif current_user.role == UserRole.ADMIN:
-        if user.tenant_id != current_user.tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot view users from other tenants"
-            )
-        return UserDetailResponse.model_validate(user)
-    
-    else:  
-        if user.id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only view your own profile"
-            )
-        return UserSelfResponse.model_validate(user)
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
 
 
 @router.patch("/{user_id}", response_model=UserDetailResponse)
@@ -153,30 +109,22 @@ async def update_user(
     - SUPER_ADMIN: Can update any ADMIN user
     - ADMIN: Can update any user in their tenant
     """
-    user = await UserService.get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    if current_user.role == UserRole.SUPER_ADMIN:
-        if user.role != UserRole.ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="SUPER_ADMIN can only update ADMIN users"
-            )
-    else: 
-        if user.tenant_id != current_user.tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot update users from other tenants"
-            )
-    
     try:
-        updated_user = await UserService.update_user(db, user_id, user_update)
+        updated_user = await UserService.update_user_with_permissions(
+            db, user_id, user_update, current_user
+        )
         return updated_user
     except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
@@ -194,29 +142,19 @@ async def delete_user(
     - SUPER_ADMIN: Can delete any ADMIN user
     - ADMIN: Can delete any user in their tenant
     """
-    user = await UserService.get_user_by_id(db, user_id)
-    if not user:
+    try:
+        await UserService.soft_delete_user_with_permissions(db, user_id, current_user)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail=str(e)
         )
-    
-    if current_user.role == UserRole.SUPER_ADMIN:
-        if user.role != UserRole.ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="SUPER_ADMIN can only delete ADMIN users"
-            )
-    else: 
-        if user.tenant_id != current_user.tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot delete users from other tenants"
-            )
-    
-    try:
-        await UserService.soft_delete_user(db, user_id)
-    except ValueError as e:
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)

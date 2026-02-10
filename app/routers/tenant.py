@@ -34,9 +34,7 @@ async def list_tenants(
     db: Annotated[AsyncSession, Depends(get_db)],
     paginator: Paginator = Depends()
 ):
-    from app.models.tenant import Tenant
-    query = select(Tenant)
-    return await paginator.paginate(db, query)
+    return await TenantService.list_tenants(db, paginator)
 
 @router.get("/{tenant_id}", response_model=TenantResponse)
 async def get_tenant(

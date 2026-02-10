@@ -18,6 +18,8 @@ from app.services.user_service import UserService
 from app.dependencies import get_current_user, security
 from app.utils.email import send_password_reset_email, send_verification_resend_email
 from fastapi.security import HTTPAuthorizationCredentials
+from jose import jwt, JWTError
+from app.config.settings import settings
 from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -92,8 +94,6 @@ async def refresh_token(
         access_token_exp = None
         
         if credentials:
-            from app.config.settings import settings
-            from jose import jwt, JWTError
             try:
                 # We use verify=False because the access token might already be expired
                 payload = jwt.decode(
@@ -139,30 +139,11 @@ async def logout(
     Requires valid access token in Authorization header and refresh token in request body
     """
     try:
-        from app.config.settings import settings
-        from jose import jwt
-        
         # Blacklist access token
-        token = credentials.credentials
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        jti = payload.get("jti")
-        exp = payload.get("exp")
-        
-        if jti and exp:
-            await UserService.logout_user(jti, exp)
+        await UserService.blacklist_token(credentials.credentials)
             
         # Blacklist refresh token
-        refresh_token = logout_data.refresh_token
-        try:
-            refresh_payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            refresh_jti = refresh_payload.get("jti")
-            refresh_exp = refresh_payload.get("exp")
-            
-            if refresh_jti and refresh_exp:
-                await UserService.logout_user(refresh_jti, refresh_exp)
-        except Exception:
-            # If refresh token is already invalid/expired, we don't need to blacklist it
-            pass
+        await UserService.blacklist_token(logout_data.refresh_token)
         
         return {"message": "Logged out successfully"}
     except Exception as e:

@@ -6,6 +6,7 @@ from sqlalchemy import select, and_
 
 from app.models.tenant import Tenant
 from app.schemas.tenant import TenantCreate, TenantUpdate
+from app.utils.pagination import Paginator, Page
 
 class TenantService:
     @staticmethod
@@ -28,14 +29,18 @@ class TenantService:
         return await db.get(Tenant, tenant_id)
 
     @staticmethod
+    def get_tenants_query():
+        """Get base query for listing tenants"""
+        return select(Tenant)
+
+    @staticmethod
     async def list_tenants(
-        db: AsyncSession, 
-        skip: int = 0, 
-        limit: int = 100
-    ) -> List[Tenant]:
-        query = select(Tenant).offset(skip).limit(limit)
-        result = await db.execute(query)
-        return result.scalars().all()
+        db: AsyncSession,
+        paginator: Paginator
+    ) -> Page:
+        """List tenants with pagination, centralizing query construction in service layer"""
+        query = TenantService.get_tenants_query()
+        return await paginator.paginate(db, query)
 
     @staticmethod
     async def update_tenant(
@@ -81,18 +86,3 @@ class TenantService:
         await db.refresh(tenant)
         return tenant
 
-    @staticmethod
-    async def restore_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> Optional[Tenant]:
-        tenant = await db.get(Tenant, tenant_id)
-        if not tenant:
-            return None
-            
-        if tenant.is_active:
-            return tenant
-            
-        tenant.is_active = True
-        tenant.deleted_at = None
-        
-        await db.commit()
-        await db.refresh(tenant)
-        return tenant
