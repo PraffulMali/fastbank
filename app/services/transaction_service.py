@@ -4,6 +4,7 @@ from decimal import Decimal
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
+import asyncio
 
 from app.models.transaction import Transaction
 from app.models.account import Account
@@ -15,6 +16,7 @@ from app.schemas.transaction import (
     CounterpartyInfo
 )
 from app.utils.pagination import Paginator, Page
+from app.tasks.background_tasks import TransactionBackgroundTasks
 
 
 class TransactionService:
@@ -27,16 +29,22 @@ class TransactionService:
     ) -> Tuple[Transaction, Transaction, uuid.UUID]:
         """
         Initiate a transfer between two accounts.
-        Creates both DEBIT and CREDIT transactions atomically.
+        Creates both DEBIT and CREDIT transactions atomically with PENDING status.
+        Triggers background task for processing.
         
         Steps:
         1. Validate source account belongs to user
         2. Validate source account has sufficient balance
         3. Validate destination account exists and is active
-        4. Create both transactions with PENDING status
-        5. Return both transactions and reference_id
+        4. Create both transactions with PENDING status (atomic)
+        5. Trigger background task to process transfer
+        6. Return both transactions and reference_id
         
-        Note: Balance updates happen in background task when status → SUCCESS
+        Background task will:
+        - Update balances atomically
+        - Update statuses to SUCCESS/FAILED
+        - Send WebSocket notifications
+        - Create persistent notifications
         """
         # 1. Get source account
         source_query = select(Account).where(
@@ -57,7 +65,7 @@ class TransactionService:
         
         # 2. Check sufficient balance
         if source_account.balance < transfer_request.amount:
-            raise ValueError(f"Insufficient balance. Available: {source_account.balance}")
+            raise ValueError(f"Insufficient balance. Available: ₹{source_account.balance}")
         
         # 3. Get destination account
         dest_query = select(Account).where(
@@ -101,7 +109,7 @@ class TransactionService:
             status=TransactionStatus.PENDING
         )
         
-        # Add both transactions
+        # Add both transactions atomically
         db.add(debit_transaction)
         db.add(credit_transaction)
         
@@ -109,11 +117,11 @@ class TransactionService:
         await db.refresh(debit_transaction)
         await db.refresh(credit_transaction)
         
-        # TODO: Trigger background task to process transfer
-        # Background task will:
-        # 1. Update both transaction statuses to SUCCESS
-        # 2. Update account balances (debit from source, credit to destination)
-        # 3. Send WebSocket notification to both users about transaction status
+        # 7. Trigger background task to process transfer
+        # Using asyncio.create_task to run it in background
+        asyncio.create_task(
+            TransactionBackgroundTasks.process_transfer(reference_id)
+        )
         
         return debit_transaction, credit_transaction, reference_id
     
@@ -214,7 +222,7 @@ class TransactionService:
         # Query transactions for these accounts
         return select(Transaction).where(
             Transaction.account_id.in_(account_ids_subquery)
-        )
+        ).order_by(Transaction.created_at.desc())
     
     
     @staticmethod
@@ -223,7 +231,9 @@ class TransactionService:
         Get base query for all transactions in a tenant.
         Used by ADMIN to see all transactions (including from inactive accounts).
         """
-        return select(Transaction).where(Transaction.tenant_id == tenant_id)
+        return select(Transaction).where(
+            Transaction.tenant_id == tenant_id
+        ).order_by(Transaction.created_at.desc())
     
     
     @staticmethod
@@ -309,25 +319,3 @@ class TransactionService:
             raise PermissionError("Invalid role for transaction access")
         
         return transaction
-
-
-# TODO: Background task function to process pending transfers
-# This should be called after initiate_transfer commits the transactions
-# 
-# async def process_transfer_background(reference_id: uuid.UUID):
-#     """
-#     Background task to process a pending transfer.
-#     
-#     Steps:
-#     1. Fetch both transactions by reference_id
-#     2. Update both statuses to SUCCESS
-#     3. Update account balances:
-#        - Debit from source account
-#        - Credit to destination account
-#     4. Commit changes
-#     5. Send WebSocket notification to both users about SUCCESS status
-#     
-#     Note: In case of any error, update both transaction statuses to FAILED
-#           and send WebSocket notification about failure (no balance changes)
-#     """
-#     pass
