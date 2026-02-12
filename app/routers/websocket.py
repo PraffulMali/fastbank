@@ -115,16 +115,22 @@ async def websocket_endpoint(
         })
         
         # Keep connection alive and handle incoming messages
-        while True:
-            # Wait for messages from client (e.g., heartbeat responses)
-            data = await websocket.receive_json()
+        # while True:
+        #     # Wait for messages from client (e.g., heartbeat responses)
+        #     data = await websocket.receive_json()
             
-            # Handle client messages (optional - for heartbeat confirmation, etc.)
-            if data.get("type") == "ping":
-                await websocket.send_json({
-                    "type": "pong",
-                    "timestamp": data.get("timestamp")
-                })
+        #     # Handle client messages (optional - for heartbeat confirmation, etc.)
+        #     if data.get("type") == "ping":
+        #         await websocket.send_json({
+        #             "type": "pong",
+        #             "timestamp": data.get("timestamp")
+        #         })
+
+        while True:
+            try:
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
     
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: User {user.id if user else 'Unknown'}")
