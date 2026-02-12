@@ -4,10 +4,12 @@ from decimal import Decimal
 from sqlalchemy import (
     String,
     Numeric,
+    BigInteger,
     ForeignKey,
     CheckConstraint,
     Index,
     Enum as SQLEnum,
+
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -54,8 +56,8 @@ class Transaction(BaseModel):
         index=True
     )
     
-    amount: Mapped[Decimal] = mapped_column(
-        Numeric(15, 2),
+    amount: Mapped[int] = mapped_column(
+        BigInteger,
         nullable=False
     )
     

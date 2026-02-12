@@ -63,9 +63,15 @@ class TransactionService:
         if source_account.user_id != current_user.id:
             raise PermissionError("You can only transfer from your own accounts")
         
+        # Convert amount to smallest unit (Paise)
+        amount_in_paise = int(transfer_request.amount * 100)
+        
         # 2. Check sufficient balance
-        if source_account.balance < transfer_request.amount:
-            raise ValueError(f"Insufficient balance. Available: ₹{source_account.balance}")
+        if source_account.balance < amount_in_paise:
+            # Display balance in Rupees for error message
+            balance_in_rupees = source_account.balance / 100
+            raise ValueError(f"Insufficient balance. Available: ₹{balance_in_rupees}")
+
         
         # 3. Get destination account
         dest_query = select(Account).where(
@@ -94,7 +100,7 @@ class TransactionService:
             reference_id=reference_id,
             transaction_type=TransactionType.DEBIT,
             reference_type=ReferenceType.TRANSFER,
-            amount=transfer_request.amount,
+            amount=amount_in_paise,
             status=TransactionStatus.PENDING
         )
         
@@ -105,7 +111,7 @@ class TransactionService:
             reference_id=reference_id,
             transaction_type=TransactionType.CREDIT,
             reference_type=ReferenceType.TRANSFER,
-            amount=transfer_request.amount,
+            amount=amount_in_paise,
             status=TransactionStatus.PENDING
         )
         

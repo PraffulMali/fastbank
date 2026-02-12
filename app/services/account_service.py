@@ -89,7 +89,7 @@ class AccountService:
             user_id=user_id,
             account_number=account_number,
             account_type=account_type,
-            balance=Decimal("0.00"),
+            balance=0,
             currency="INR",
             is_active=True
         )

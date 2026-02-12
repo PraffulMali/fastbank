@@ -47,6 +47,13 @@ class AccountResponse(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
+    @field_validator("balance", mode="before")
+    def convert_balance_to_rupees(cls, v):
+        if isinstance(v, int):
+            return Decimal(v) / 100
+        return v
+
+
 
 class AccountUserSingleResponse(BaseModel):
     """
@@ -62,6 +69,13 @@ class AccountUserSingleResponse(BaseModel):
     updated_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+    
+    @field_validator("balance", mode="before")
+    def convert_balance_to_rupees(cls, v):
+        if isinstance(v, int):
+            return Decimal(v) / 100
+        return v
+
 
 
 class AccountUserResponse(BaseModel):

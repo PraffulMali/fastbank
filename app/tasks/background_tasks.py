@@ -201,7 +201,7 @@ class TransactionBackgroundTasks:
                 tenant_id=debit_txn.tenant_id,
                 user_id=debit_account.user_id,
                 notification_type=NotificationType.TRANSACTION_FAILED,
-                message=f"Transfer of ₹{debit_txn.amount} failed. Reason: {reason}",
+                message=f"Transfer of ₹{debit_txn.amount / 100} failed. Reason: {reason}",
                 reference_id=debit_txn.id,
                 reference_type="transaction"
             )
@@ -219,47 +219,59 @@ class TransactionBackgroundTasks:
         Also send admin notification for high-value transactions.
         """
         # Notification to sender (debit)
-        await NotificationService.create_notification(
-            db=db,
-            tenant_id=debit_txn.tenant_id,
-            user_id=debit_account.user_id,
-            notification_type=NotificationType.TRANSACTION_SUCCESS,
-            message=f"Successfully transferred ₹{debit_txn.amount} to account {credit_account.account_number}. New balance: ₹{debit_account.balance}",
-            reference_id=debit_txn.id,
-            reference_type="transaction"
-        )
+        try:
+            await NotificationService.create_notification(
+                db=db,
+                tenant_id=debit_txn.tenant_id,
+                user_id=debit_account.user_id,
+                notification_type=NotificationType.TRANSACTION_SUCCESS,
+                message=f"Successfully transferred ₹{debit_txn.amount / 100} to account {credit_account.account_number}. New balance: ₹{debit_account.balance / 100}",
+                reference_id=debit_txn.id,
+                reference_type="transaction"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send success notification to sender {debit_account.user_id}: {e}")
         
         # Notification to receiver (credit)
-        await NotificationService.create_notification(
-            db=db,
-            tenant_id=credit_txn.tenant_id,
-            user_id=credit_account.user_id,
-            notification_type=NotificationType.TRANSACTION_SUCCESS,
-            message=f"Received ₹{credit_txn.amount} from account {debit_account.account_number}. New balance: ₹{credit_account.balance}",
-            reference_id=credit_txn.id,
-            reference_type="transaction"
-        )
-        
-        # High-value transaction alert to admins (e.g., > 100,000)
-        if debit_txn.amount > Decimal("100000"):
-            # Get all admin users in both tenants
-            admin_query = select(User).where(
-                and_(
-                    User.role.in_(["ADMIN"]),
-                    User.tenant_id.in_([debit_txn.tenant_id, credit_txn.tenant_id]),
-                    User.is_active == True
-                )
+        try:
+            await NotificationService.create_notification(
+                db=db,
+                tenant_id=credit_txn.tenant_id,
+                user_id=credit_account.user_id,
+                notification_type=NotificationType.TRANSACTION_SUCCESS,
+                message=f"Received ₹{credit_txn.amount / 100} from account {debit_account.account_number}. New balance: ₹{credit_account.balance / 100}",
+                reference_id=credit_txn.id,
+                reference_type="transaction"
             )
-            result = await db.execute(admin_query)
-            admins = list(result.scalars().all())
-            
-            for admin in admins:
-                await NotificationService.create_notification(
-                    db=db,
-                    tenant_id=admin.tenant_id,
-                    user_id=admin.id,
-                    notification_type=NotificationType.HIGH_VALUE_TRANSACTION,
-                    message=f"High-value transfer of ₹{debit_txn.amount} from {debit_account.account_number} to {credit_account.account_number}",
-                    reference_id=debit_txn.id,
-                    reference_type="transaction"
+        except Exception as e:
+            logger.error(f"Failed to send success notification to receiver {credit_account.user_id}: {e}")
+        
+        # High-value transaction alert to admins (e.g., > 100,000 Rupees = 10,000,000 Paise)
+        if debit_txn.amount > 100000 * 100:
+            try:
+                # Get all admin users in both tenants
+                admin_query = select(User).where(
+                    and_(
+                        User.role.in_(["ADMIN"]),
+                        User.tenant_id.in_([debit_txn.tenant_id, credit_txn.tenant_id]),
+                        User.is_active == True
+                    )
                 )
+                result = await db.execute(admin_query)
+                admins = list(result.scalars().all())
+                
+                for admin in admins:
+                    try:
+                        await NotificationService.create_notification(
+                            db=db,
+                            tenant_id=admin.tenant_id,
+                            user_id=admin.id,
+                            notification_type=NotificationType.HIGH_VALUE_TRANSACTION,
+                            message=f"High-value transfer of ₹{debit_txn.amount / 100} from {debit_account.account_number} to {credit_account.account_number}",
+                            reference_id=debit_txn.id,
+                            reference_type="transaction"
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send high-value notification to admin {admin.id}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to process high-value notifications: {e}")
