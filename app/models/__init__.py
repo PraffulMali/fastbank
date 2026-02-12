@@ -5,14 +5,17 @@ from app.models.enums import (
     TransactionType, 
     TransactionStatus, 
     ReferenceType,
-    NotificationType  # NEW
+    NotificationType,
+    LoanStatus
 )
+from app.models.enums import UserRole, LoanStatus, AccountType
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.user_identity import UserIdentity
 from app.models.account import Account
 from app.models.transaction import Transaction
-from app.models.notification import Notification  # NEW
+from app.models.notification import Notification 
+from app.models.loan import Loan
 
 __all__ = [
     "BaseModel", 
@@ -21,11 +24,14 @@ __all__ = [
     "TransactionType",
     "TransactionStatus",
     "ReferenceType",
-    "NotificationType",  # NEW
+    "NotificationType",
+    "LoanStatus",
     "Tenant", 
     "User", 
     "UserIdentity", 
     "Account",
     "Transaction",
-    "Notification"  # NEW
+    "Notification",
+    "Loan"
 ]
+
