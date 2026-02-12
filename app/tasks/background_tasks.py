@@ -47,110 +47,130 @@ class TransactionBackgroundTasks:
         """
         async with AsyncSessionLocal() as db:
             try:
-                # Simulate processing delay (1-3 seconds)
-                await asyncio.sleep(2)
-                
-                # Fetch both transactions
-                query = select(Transaction).where(
-                    Transaction.reference_id == reference_id
-                )
-                result = await db.execute(query)
-                transactions = list(result.scalars().all())
-                
-                if len(transactions) != 2:
-                    logger.error(f"Transfer {reference_id}: Expected 2 transactions, found {len(transactions)}")
-                    return
-                
-                # Identify debit and credit transactions
-                debit_txn = next(
-                    (txn for txn in transactions if txn.transaction_type == TransactionType.DEBIT), 
-                    None
-                )
-                credit_txn = next(
-                    (txn for txn in transactions if txn.transaction_type == TransactionType.CREDIT), 
-                    None
-                )
-                
-                if not debit_txn or not credit_txn:
-                    logger.error(f"Transfer {reference_id}: Missing debit or credit transaction")
-                    return
-                
-                # Verify both are PENDING
-                if debit_txn.status != TransactionStatus.PENDING or credit_txn.status != TransactionStatus.PENDING:
-                    logger.warning(f"Transfer {reference_id}: Transactions not in PENDING state")
-                    return
-                
-                # Fetch accounts with row-level locking
-                debit_account = await db.get(Account, debit_txn.account_id)
-                credit_account = await db.get(Account, credit_txn.account_id)
-                
-                if not debit_account or not credit_account:
-                    logger.error(f"Transfer {reference_id}: Account not found")
-                    await TransactionBackgroundTasks._mark_transfer_failed(
-                        db, debit_txn, credit_txn, "Account not found"
-                    )
-                    return
-                
-                # Verify sufficient balance (double-check)
-                if debit_account.balance < debit_txn.amount:
-                    logger.error(f"Transfer {reference_id}: Insufficient balance")
-                    await TransactionBackgroundTasks._mark_transfer_failed(
-                        db, debit_txn, credit_txn, "Insufficient balance"
-                    )
-                    return
-                
-                # ATOMIC OPERATION: Update balances
-                debit_account.balance -= debit_txn.amount
-                credit_account.balance += credit_txn.amount
-                
-                # Update transaction statuses
-                debit_txn.status = TransactionStatus.SUCCESS
-                credit_txn.status = TransactionStatus.SUCCESS
-                
-                # Commit all changes atomically
-                await db.commit()
-                
-                logger.info(f"Transfer {reference_id}: SUCCESS")
-                
-                # Refresh to get updated data
-                await db.refresh(debit_txn)
-                await db.refresh(credit_txn)
-                await db.refresh(debit_account)
-                await db.refresh(credit_account)
-                
-                # Send notifications to both users
-                await TransactionBackgroundTasks._send_transaction_notifications(
-                    db, debit_txn, credit_txn, debit_account, credit_account
-                )
-                
-            except Exception as e:
-                logger.error(f"Transfer {reference_id}: Error - {e}")
-                await db.rollback()
-                
-                # Try to mark as failed
-                try:
+                # Simulate processing delay
+                await asyncio.sleep(5)
+
+                # ✅ START ATOMIC TRANSACTION
+                async with db.begin():
+
+                    # Fetch transactions
                     query = select(Transaction).where(
                         Transaction.reference_id == reference_id
                     )
                     result = await db.execute(query)
                     transactions = list(result.scalars().all())
-                    
-                    if len(transactions) == 2:
-                        debit_txn = next(
-                            (txn for txn in transactions if txn.transaction_type == TransactionType.DEBIT), 
-                            None
+
+                    if len(transactions) != 2:
+                        logger.error(f"Transfer {reference_id}: Expected 2 transactions")
+                        return
+
+                    # Identify transactions
+                    debit_txn = next(
+                        txn for txn in transactions
+                        if txn.transaction_type == TransactionType.DEBIT
+                    )
+
+                    credit_txn = next(
+                        txn for txn in transactions
+                        if txn.transaction_type == TransactionType.CREDIT
+                    )
+
+                    # Validate states
+                    if (
+                        debit_txn.status != TransactionStatus.PENDING
+                        or credit_txn.status != TransactionStatus.PENDING
+                    ):
+                        logger.warning(f"Transfer {reference_id}: Not PENDING")
+                        return
+
+                    # ✅ LOCK ACCOUNT ROWS 🔥 CRITICAL FIX
+                    debit_account = (
+                        await db.execute(
+                            select(Account)
+                            .where(Account.id == debit_txn.account_id)
+                            .with_for_update()
                         )
-                        credit_txn = next(
-                            (txn for txn in transactions if txn.transaction_type == TransactionType.CREDIT), 
-                            None
+                    ).scalar_one()
+
+                    credit_account = (
+                        await db.execute(
+                            select(Account)
+                            .where(Account.id == credit_txn.account_id)
+                            .with_for_update()
                         )
-                        
-                        if debit_txn and credit_txn:
-                            await TransactionBackgroundTasks._mark_transfer_failed(
-                                db, debit_txn, credit_txn, str(e)
+                    ).scalar_one()
+
+                    if not debit_account or not credit_account:
+                        logger.error(f"Transfer {reference_id}: Account not found")
+
+                        debit_txn.status = TransactionStatus.FAILED
+                        credit_txn.status = TransactionStatus.FAILED
+                        return
+
+                    # Balance check
+                    if debit_account.balance < debit_txn.amount:
+                        logger.error(f"Transfer {reference_id}: Insufficient balance")
+
+                        debit_txn.status = TransactionStatus.FAILED
+                        credit_txn.status = TransactionStatus.FAILED
+                        return
+
+                    # ✅ SAFE ATOMIC UPDATE
+                    debit_account.balance -= debit_txn.amount
+                    credit_account.balance += credit_txn.amount
+
+                    debit_txn.status = TransactionStatus.SUCCESS
+                    credit_txn.status = TransactionStatus.SUCCESS
+
+                # ✅ AUTO COMMIT happens here
+
+                logger.info(f"Transfer {reference_id}: SUCCESS")
+
+                # Refresh updated objects
+                await db.refresh(debit_txn)
+                await db.refresh(credit_txn)
+                await db.refresh(debit_account)
+                await db.refresh(credit_account)
+
+                # Send notifications (outside transaction)
+                await TransactionBackgroundTasks._send_transaction_notifications(
+                    db, debit_txn, credit_txn, debit_account, credit_account
+                )
+
+            except Exception as e:
+                logger.error(f"Transfer {reference_id}: Error - {e}")
+
+                # ✅ No manual rollback needed if error occurs inside db.begin()
+                # But safe to call defensively
+                await db.rollback()
+
+                # Try marking FAILED (new transaction)
+                try:
+                    async with db.begin():
+
+                        query = select(Transaction).where(
+                            Transaction.reference_id == reference_id
+                        )
+                        result = await db.execute(query)
+                        transactions = list(result.scalars().all())
+
+                        if len(transactions) == 2:
+                            debit_txn = next(
+                                txn for txn in transactions
+                                if txn.transaction_type == TransactionType.DEBIT
                             )
+
+                            credit_txn = next(
+                                txn for txn in transactions
+                                if txn.transaction_type == TransactionType.CREDIT
+                            )
+
+                            debit_txn.status = TransactionStatus.FAILED
+                            credit_txn.status = TransactionStatus.FAILED
+
                 except Exception as nested_error:
-                    logger.error(f"Transfer {reference_id}: Failed to mark as failed - {nested_error}")
+                    logger.error(f"Transfer {reference_id}: Failed to mark FAILED - {nested_error}")
+
     
     @staticmethod
     async def _mark_transfer_failed(
