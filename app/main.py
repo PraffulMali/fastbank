@@ -1,18 +1,52 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, tenant, user, account, transaction
+from app.routers import websocket as ws_router
+from app.routers import notification
 
 app = FastAPI(
     title="FastBank API",
-    description="FastAPI Project",
+    description="FastAPI Banking Project with WebSocket Support",
     version="1.0.0"
 )
 
+# CORS middleware for WebSocket and REST API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include REST API routers
 app.include_router(auth.router)
 app.include_router(tenant.router)
 app.include_router(user.router)
 app.include_router(account.router)
 app.include_router(transaction.router)
+app.include_router(notification.router)
+
+# Include WebSocket router
+app.include_router(ws_router.router)
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to FastBank API"}
+    return {
+        "message": "Welcome to FastBank API",
+        "version": "1.0.0",
+        "features": [
+            "REST API",
+            "WebSocket Support",
+            "Real-time Notifications",
+            "Background Task Processing"
+        ]
+    }
+
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "FastBank API"
+    }

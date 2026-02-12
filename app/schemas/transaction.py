@@ -38,6 +38,13 @@ class TransactionResponse(BaseModel):
     updated_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+    
+    @field_validator("amount", mode="before")
+    def convert_paise_to_rupees(cls, v):
+        if isinstance(v, int):
+            return Decimal(v) / 100
+        return v
+
 
 
 class CounterpartyInfo(BaseModel):
@@ -70,6 +77,13 @@ class TransactionDetailResponse(BaseModel):
     counterparty: Optional[CounterpartyInfo] = None
     
     model_config = ConfigDict(from_attributes=True)
+    
+    @field_validator("amount", mode="before")
+    def convert_paise_to_rupees(cls, v):
+        if isinstance(v, int):
+            return Decimal(v) / 100
+        return v
+
 
 
 class TransferResponse(BaseModel):

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from app.models.tenant import Tenant
     from app.models.user_identity import UserIdentity
     from app.models.account import Account
-
+    from app.models.notification import Notification
 
 
 class User(BaseModel):
@@ -61,7 +61,13 @@ class User(BaseModel):
         cascade="all, delete-orphan",
         lazy="selectin"
     )
-
+    
+    notifications: Mapped[list["Notification"]] = relationship(
+        "Notification",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
     
     __table_args__ = (
         CheckConstraint(
