@@ -16,6 +16,8 @@ if TYPE_CHECKING:
     from app.models.user_identity import UserIdentity
     from app.models.account import Account
     from app.models.notification import Notification
+    from app.models.loan import Loan
+
 
 
 class User(BaseModel):
@@ -69,6 +71,15 @@ class User(BaseModel):
         lazy="selectin"
     )
     
+
+    loans: Mapped[list["Loan"]] = relationship(
+        "Loan",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        foreign_keys="Loan.user_id"
+    )
+
     __table_args__ = (
         CheckConstraint(
             "(role = 'SUPER_ADMIN' AND tenant_id IS NULL) OR "

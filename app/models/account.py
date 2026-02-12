@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from app.models.tenant import Tenant
     from app.models.user import User
     from app.models.transaction import Transaction 
+    from app.models.loan import Loan
+
 
 class Account(BaseModel):
     __tablename__ = "accounts"
@@ -78,6 +80,13 @@ class Account(BaseModel):
     
     transactions: Mapped[list["Transaction"]] = relationship(
         "Transaction",
+        back_populates="account",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+
+    loans: Mapped[list["Loan"]] = relationship(
+        "Loan",
         back_populates="account",
         cascade="all, delete-orphan",
         lazy="selectin"

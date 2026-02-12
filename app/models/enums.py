@@ -39,3 +39,8 @@ class NotificationType(str, Enum):
     LOAN_DISBURSED = "LOAN_DISBURSED"
     HIGH_VALUE_TRANSACTION = "HIGH_VALUE_TRANSACTION"
     SYSTEM_ALERT = "SYSTEM_ALERT"
+    
+class LoanStatus(str, Enum):
+    APPLIED = "APPLIED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
