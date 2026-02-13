@@ -1,5 +1,3 @@
-# app/routers/loan.py
-
 from typing import Annotated, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Query

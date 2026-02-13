@@ -1,5 +1,3 @@
-# app/services/loan_service.py
-
 from typing import Optional, List
 import uuid
 from datetime import datetime, timezone
@@ -92,10 +90,37 @@ class LoanService:
         await db.commit()
         await db.refresh(new_loan)
         
-        # TODO: Send notification to ADMIN about new loan application
-        # TODO (WebSocket): Push real-time notification to all connected admins
-        # Notification content: "New loan application from {user.full_name} for ₹{principal_amount/100}"
-        # Include loan_purpose in notification so admin can see it
+        # Send notification to ADMIN about new loan application
+        # Get the user details for notification message
+        user = await db.get(User, user_id)
+        
+        # Get all admin users in this tenant
+        admin_query = select(User).where(
+            and_(
+                User.tenant_id == tenant_id,
+                User.role == UserRole.ADMIN,
+                User.is_active == True
+            )
+        )
+        admin_result = await db.execute(admin_query)
+        admins = list(admin_result.scalars().all())
+        
+        # Import notification service
+        from app.services.notification_service import NotificationService
+        from app.models.enums import NotificationType
+        
+        # Send notification to each admin
+        for admin in admins:
+            await NotificationService.create_notification(
+                db=db,
+                tenant_id=tenant_id,
+                user_id=admin.id,
+                notification_type=NotificationType.LOAN_APPLIED,
+                message=f"New loan application from {user.full_name} for ₹{loan_in.principal_amount:,.2f}. Purpose: {loan_in.loan_purpose[:50]}{'...' if len(loan_in.loan_purpose) > 50 else ''}",
+                reference_id=new_loan.id,
+                reference_type="loan",
+                send_websocket=True
+            )
         
         return new_loan
     
@@ -130,32 +155,76 @@ class LoanService:
         if decision.decision == "APPROVED":
             loan.status = LoanStatus.APPROVED
             
-            # TODO (TRANSACTION): Create transaction to credit user's account
-            # Transaction details:
-            # - account_id: loan.account_id
-            # - transaction_type: CREDIT
-            # - reference_type: LOAN_DISBURSEMENT
-            # - reference_id: loan.id
-            # - amount: loan.principal_amount
-            # - status: PENDING (background task will process)
+            # Create transaction to credit user's account
+            from app.models.transaction import Transaction
+            from app.models.enums import TransactionType, TransactionStatus, ReferenceType
             
-            # TODO: Update account balance (or let transaction service handle it)
-            # account = await db.get(Account, loan.account_id)
-            # account.balance += loan.principal_amount
+            # Create CREDIT transaction for loan disbursement
+            loan_transaction = Transaction(
+                tenant_id=tenant_id,
+                account_id=loan.account_id,
+                reference_id=loan.id,
+                transaction_type=TransactionType.CREDIT,
+                reference_type=ReferenceType.LOAN,
+                amount=loan.principal_amount,
+                status=TransactionStatus.SUCCESS  # Loan disbursement is immediate
+            )
             
-            # TODO: Send notification to USER about loan approval
-            # Notification: "Your loan of ₹{principal_amount/100} has been approved and credited to your account"
+            db.add(loan_transaction)
             
-            # TODO (WebSocket): Push real-time notification to user
-            # Send loan approval update with new account balance
+            # Update account balance
+            account = await db.get(Account, loan.account_id)
+            if account:
+                account.balance += loan.principal_amount
+            
+            # Send notification to USER about loan approval
+            from app.services.notification_service import NotificationService
+            from app.models.enums import NotificationType
+            
+            await NotificationService.create_notification(
+                db=db,
+                tenant_id=loan.tenant_id,
+                user_id=loan.user_id,
+                notification_type=NotificationType.LOAN_APPROVED,
+                message=f"Your loan of ₹{loan.principal_amount / 100:,.2f} has been approved!",
+                reference_id=loan.id,
+                reference_type="loan",
+                send_websocket=True
+            )
+            
+            # Send loan disbursement notification
+            await NotificationService.create_notification(
+                db=db,
+                tenant_id=loan.tenant_id,
+                user_id=loan.user_id,
+                notification_type=NotificationType.LOAN_DISBURSED,
+                message=f"Loan amount of ₹{loan.principal_amount / 100:,.2f} has been credited to your account {account.account_number}. New balance: ₹{account.balance / 100:,.2f}",
+                reference_id=loan_transaction.id,
+                reference_type="transaction",
+                send_websocket=True
+            )
             
         else:  # REJECTED
             loan.status = LoanStatus.REJECTED
             
-            # TODO: Send notification to USER about loan rejection
-            # Notification: "Your loan application has been rejected. Reason: {rejection_reason}"
+            # Send notification to USER about loan rejection
+            from app.services.notification_service import NotificationService
+            from app.models.enums import NotificationType
             
-            # TODO (WebSocket): Push real-time notification to user
+            rejection_message = f"Your loan application has been rejected."
+            if decision.rejection_reason:
+                rejection_message += f" Reason: {decision.rejection_reason}"
+            
+            await NotificationService.create_notification(
+                db=db,
+                tenant_id=loan.tenant_id,
+                user_id=loan.user_id,
+                notification_type=NotificationType.LOAN_REJECTED,
+                message=rejection_message,
+                reference_id=loan.id,
+                reference_type="loan",
+                send_websocket=True
+            )
         
         loan.approved_by = admin_id
         loan.decided_at = datetime.now(timezone.utc)
