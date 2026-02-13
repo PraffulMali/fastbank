@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, tenant, user, account, transaction
+from app.routers import auth, tenant, user, account, transaction, loan
 from app.routers import websocket as ws_router
 from app.routers import notification
 
@@ -25,6 +25,7 @@ app.include_router(tenant.router)
 app.include_router(user.router)
 app.include_router(account.router)
 app.include_router(transaction.router)
+app.include_router(loan.router)
 app.include_router(notification.router)
 
 # Include WebSocket router
