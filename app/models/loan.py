@@ -146,7 +146,7 @@ class Loan(BaseModel):
     __table_args__ = (
         CheckConstraint("principal_amount > 0", name="check_principal_positive"),
         CheckConstraint("interest_rate >= 0 AND interest_rate <= 100", name="check_interest_valid"),
-        CheckConstraint("tenure_months > 0", name="check_tenure_positive"),
+        CheckConstraint("tenure_months >= 0", name="check_tenure_valid"),
         CheckConstraint(
             "remaining_principal >= 0 AND remaining_principal <= principal_amount",
             name="check_remaining_principal_valid"

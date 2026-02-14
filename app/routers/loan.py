@@ -10,9 +10,12 @@ from app.schemas.loan import (
     LoanCreate,
     LoanApprovalDecision,
     LoanResponse,
-    LoanUserResponse
+    LoanUserResponse,
+    AdvanceLoanRepaymentRequest,
+    AdvanceLoanRepaymentResponse
 )
 from app.services.loan_service import LoanService
+from app.services.advance_loan_repayment_service import AdvanceLoanRepaymentService
 from app.dependencies import get_current_user, require_tenant_admin
 from app.utils.pagination import Paginator, Page
 
@@ -253,3 +256,85 @@ async def delete_loan(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+@router.post("/{loan_id}/advance-repayment", response_model=AdvanceLoanRepaymentResponse)
+async def make_advance_loan_repayment(
+    loan_id: uuid.UUID,
+    repayment_request: AdvanceLoanRepaymentRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    """
+    Make an advance loan repayment (USER only).
+    
+    This endpoint allows borrowers to make advance payments toward their active approved loans.
+    
+    **Process Flow:**
+    1. Validates loan eligibility (APPROVED status, remaining principal > 0)
+    2. Converts payment amount from rupees to paisa
+    3. Checks account balance for sufficient funds
+    4. Calculates accrued interest using monthly interest rate
+    5. Allocates payment: **interest first, then principal**
+    6. Reduces loan's remaining_principal by principal component only
+    7. Determines if payment results in foreclosure (full payoff)
+    8. Recalculates remaining tenure using amortization formula if not foreclosed
+    9. Atomically executes:
+       - Creates DEBIT transaction (reference_type=LOAN)
+       - Updates account balance
+       - Updates loan (remaining_principal, tenure, status)
+       - Creates loan repayment record
+    10. Sends success/failure notifications (and email on failure)
+    
+    **Payment Allocation:**
+    - Interest Component = Remaining Principal × (Annual Rate / 12 / 100)
+    - Principal Component = Payment Amount - Interest Component
+    - Remaining Principal = Old Remaining Principal - Principal Component
+    
+    **Tenure Recalculation:**
+    - Uses amortization formula: n = -log(1 - (P × r / EMI)) / log(1 + r)
+    - Requires EMI > P × r for formula to work
+    - If condition not met, tenure remains unchanged (loan may need restructuring)
+    
+    **Foreclosure:**
+    - Triggered when payment clears full outstanding obligation
+    - Loan status changes to FORECLOSED
+    - Tenure set to 0
+    
+    **Failure Handling:**
+    - If insufficient funds: NO financial state is modified
+    - Sends notification and email to user
+    - Returns detailed error message
+    
+    **Restrictions:**
+    - Only loan owner (USER) can make advance repayments
+    - Loan must be in APPROVED status
+    - Loan must have remaining principal > 0
+    - Account must have sufficient balance
+    """
+    # Only regular users can make advance repayments on their own loans
+    if current_user.role != UserRole.USER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only regular users can make advance loan repayments"
+        )
+    
+    success, message, details = await AdvanceLoanRepaymentService.process_advance_repayment(
+        db=db,
+        loan_id=loan_id,
+        payment_amount_rupees=repayment_request.payment_amount,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id
+    )
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message
+        )
+    
+    return AdvanceLoanRepaymentResponse(
+        success=success,
+        message=message,
+        **details if details else {}
+    )

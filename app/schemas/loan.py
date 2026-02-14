@@ -114,3 +114,43 @@ class LoanUserResponse(BaseModel):
         if isinstance(v, int):
             return Decimal(v) / 100
         return v
+
+
+class AdvanceLoanRepaymentRequest(BaseModel):
+    """
+    Schema for borrower making an advance loan repayment.
+    """
+    payment_amount: Decimal = Field(
+        ..., 
+        gt=0, 
+        decimal_places=2, 
+        description="Payment amount in rupees"
+    )
+    
+    @field_validator("payment_amount")
+    def validate_payment_amount(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("Payment amount must be greater than zero")
+        if v > Decimal("100000000.00"):  # 10 crore max
+            raise ValueError("Payment amount cannot exceed ₹10,00,00,000")
+        return v
+
+
+class AdvanceLoanRepaymentResponse(BaseModel):
+    """
+    Schema for advance loan repayment response.
+    """
+    success: bool
+    message: str
+    payment_amount: Optional[Decimal] = None
+    interest_component: Optional[Decimal] = None
+    principal_component: Optional[Decimal] = None
+    old_remaining_principal: Optional[Decimal] = None
+    new_remaining_principal: Optional[Decimal] = None
+    old_tenure: Optional[int] = None
+    new_tenure: Optional[int] = None
+    is_foreclosure: Optional[bool] = None
+    loan_status: Optional[str] = None
+    transaction_id: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
