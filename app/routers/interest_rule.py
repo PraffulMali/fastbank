@@ -14,7 +14,7 @@ from app.schemas.interest_rule import (
 )
 from app.services.interest_rule_service import InterestRuleService
 from app.models.enums import UserRole
-from app.dependencies import require_admin, get_current_user
+from app.dependencies import require_admin, require_tenant_admin, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(
@@ -27,7 +27,7 @@ router = APIRouter(
 async def create_interest_rule(
     rule_in: InterestRuleCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)]
+    current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
     """
     Create a new interest rule (ADMIN only).
@@ -43,11 +43,6 @@ async def create_interest_rule(
     
     Validation is automatic - just provide the right fields!
     """
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin must belong to a tenant"
-        )
     
     try:
         rule = await InterestRuleService.create_interest_rule(
@@ -64,7 +59,7 @@ async def create_interest_rule(
 @router.get("/", response_model=Page[InterestRuleResponse])
 async def list_interest_rules(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends()
 ):
     """
@@ -72,17 +67,6 @@ async def list_interest_rules(
     - Accessible to: Tenant Admin, Tenant User
     - Not accessible to: Super Admin
     """
-    if current_user.role == UserRole.SUPER_ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Super Admin cannot access this resource"
-        )
-
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User must belong to a tenant"
-        )
     
     return await InterestRuleService.list_interest_rules(
         db, current_user.tenant_id, paginator
@@ -93,24 +77,13 @@ async def list_interest_rules(
 async def get_interest_rule(
     rule_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_tenant_member)]
 ):
     """
     Get interest rule details.
     - Accessible to: Tenant Admin, Tenant User
     - Not accessible to: Super Admin
     """
-    if current_user.role == UserRole.SUPER_ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Super Admin cannot access this resource"
-        )
-
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User must belong to a tenant"
-        )
     
     rule = await InterestRuleService.get_interest_rule_detail(
         db, rule_id, current_user.tenant_id
@@ -130,7 +103,7 @@ async def update_interest_rule(
     rule_id: uuid.UUID,
     rule_update: InterestRuleUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)]
+    current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
     """
     Update interest rule (ADMIN only).
@@ -138,11 +111,6 @@ async def update_interest_rule(
     - Cannot change rule_type, account_type, loan_type, or balance ranges
     - To change other fields, delete and create new rule
     """
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin must belong to a tenant"
-        )
     
     try:
         rule = await InterestRuleService.update_interest_rule(
@@ -168,18 +136,13 @@ async def update_interest_rule(
 async def delete_interest_rule(
     rule_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)]
+    current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
     """
     Delete interest rule (ADMIN only) - HARD DELETE.
     - No protection checks (safe to delete)
     - Rules are configuration, not transactional data
     """
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin must belong to a tenant"
-        )
     
     try:
         await InterestRuleService.delete_interest_rule(

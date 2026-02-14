@@ -13,7 +13,7 @@ from app.schemas.account_type import (
 )
 from app.services.account_type_service import AccountTypeService
 from app.models.enums import UserRole
-from app.dependencies import require_admin, get_current_user
+from app.dependencies import require_admin, require_tenant_admin, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(
@@ -26,18 +26,13 @@ router = APIRouter(
 async def create_account_type(
     account_type_in: AccountTypeCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)]
+    current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
     """
     Create a new account type (ADMIN only).
     - Creates account type for admin's tenant
     - Name must be unique within tenant
     """
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin must belong to a tenant"
-        )
     
     try:
         account_type = await AccountTypeService.create_account_type(
@@ -54,7 +49,7 @@ async def create_account_type(
 @router.get("/", response_model=Page[AccountTypeResponse])
 async def list_account_types(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
     include_inactive: bool = False
 ):
@@ -65,17 +60,6 @@ async def list_account_types(
     - Shows only active types by default
     - Set include_inactive=true to see all
     """
-    if current_user.role == UserRole.SUPER_ADMIN:
-         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Super Admin cannot access this resource"
-        )
-        
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User must belong to a tenant"
-        )
     
     return await AccountTypeService.list_account_types(
         db, current_user.tenant_id, paginator, include_inactive
@@ -86,24 +70,13 @@ async def list_account_types(
 async def get_account_type(
     account_type_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_tenant_member)]
 ):
     """
     Get account type details with interest rules.
     - Accessible to: Tenant Admin, Tenant User
     - Not accessible to: Super Admin
     """
-    if current_user.role == UserRole.SUPER_ADMIN:
-         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Super Admin cannot access this resource"
-        )
-
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User must belong to a tenant"
-        )
     
     account_type = await AccountTypeService.get_account_type_with_rules(
         db, account_type_id, current_user.tenant_id
@@ -123,18 +96,13 @@ async def update_account_type(
     account_type_id: uuid.UUID,
     account_type_update: AccountTypeUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)]
+    current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
     """
     Update account type (ADMIN only).
     - Can update name and is_active status
     - Name must remain unique within tenant
     """
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin must belong to a tenant"
-        )
     
     try:
         account_type = await AccountTypeService.update_account_type(
@@ -165,7 +133,7 @@ async def update_account_type(
 async def delete_account_type(
     account_type_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)]
+    current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
     """
     Delete account type (ADMIN only) - HARD DELETE.
@@ -173,11 +141,6 @@ async def delete_account_type(
     - Fails if rules exist (delete rules first)
     - Succeeds only if no rules reference it
     """
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin must belong to a tenant"
-        )
     
     try:
         await AccountTypeService.delete_account_type(

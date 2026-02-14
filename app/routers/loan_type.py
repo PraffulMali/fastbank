@@ -13,7 +13,7 @@ from app.schemas.loan_type import (
 )
 from app.services.loan_type_service import LoanTypeService
 from app.models.enums import UserRole
-from app.dependencies import require_admin, get_current_user
+from app.dependencies import require_admin, require_tenant_admin, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(
@@ -26,18 +26,13 @@ router = APIRouter(
 async def create_loan_type(
     loan_type_in: LoanTypeCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)]
+    current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
     """
     Create a new loan type (ADMIN only).
     - Creates loan type for admin's tenant
     - Name must be unique within tenant
     """
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin must belong to a tenant"
-        )
     
     try:
         loan_type = await LoanTypeService.create_loan_type(
@@ -54,7 +49,7 @@ async def create_loan_type(
 @router.get("/", response_model=Page[LoanTypeResponse])
 async def list_loan_types(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
     include_inactive: bool = False
 ):
@@ -65,17 +60,6 @@ async def list_loan_types(
     - Shows only active types by default
     - Set include_inactive=true to see all
     """
-    if current_user.role == UserRole.SUPER_ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Super Admin cannot access this resource"
-        )
-
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User must belong to a tenant"
-        )
     
     return await LoanTypeService.list_loan_types(
         db, current_user.tenant_id, paginator, include_inactive
@@ -86,24 +70,13 @@ async def list_loan_types(
 async def get_loan_type(
     loan_type_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_tenant_member)]
 ):
     """
     Get loan type details with interest rate.
     - Accessible to: Tenant Admin, Tenant User
     - Not accessible to: Super Admin
     """
-    if current_user.role == UserRole.SUPER_ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Super Admin cannot access this resource"
-        )
-
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User must belong to a tenant"
-        )
     
     loan_type = await LoanTypeService.get_loan_type_with_rate(
         db, loan_type_id, current_user.tenant_id
@@ -123,18 +96,13 @@ async def update_loan_type(
     loan_type_id: uuid.UUID,
     loan_type_update: LoanTypeUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)]
+    current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
     """
     Update loan type (ADMIN only).
     - Can update name and is_active status
     - Name must remain unique within tenant
     """
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin must belong to a tenant"
-        )
     
     try:
         loan_type = await LoanTypeService.update_loan_type(
@@ -165,7 +133,7 @@ async def update_loan_type(
 async def delete_loan_type(
     loan_type_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_admin)]
+    current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
     """
     Delete loan type (ADMIN only) - HARD DELETE.
@@ -174,11 +142,6 @@ async def delete_loan_type(
     - Fails if either exist (set to inactive instead)
     - Succeeds only if no references exist
     """
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin must belong to a tenant"
-        )
     
     try:
         await LoanTypeService.delete_loan_type(

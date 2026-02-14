@@ -131,5 +131,33 @@ async def require_tenant_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This operation requires ADMIN privileges"
         )
+        
+    if not current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User must belong to a tenant"
+        )
     
+    return current_user
+
+
+async def require_tenant_member(
+    current_user: Annotated[User, Depends(get_current_user)]
+) -> User:
+    """
+    Dependency to require being a member of a tenant (ADMIN or USER).
+    Explicitly blocks SUPER_ADMIN.
+    """
+    if current_user.role == UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SUPER_ADMIN cannot access this resource"
+        )
+    
+    if not current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User must belong to a tenant"
+        )
+        
     return current_user
