@@ -51,6 +51,28 @@ class Tenant(BaseModel):
         cascade="all, delete-orphan",
         lazy="selectin"
     )
+
+    account_types: Mapped[list["AccountType"]] = relationship(
+        "AccountType",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+
+    loan_types: Mapped[list["LoanType"]] = relationship(
+        "LoanType",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+
+    interest_rules: Mapped[list["InterestRule"]] = relationship(
+        "InterestRule",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+
     
     def __repr__(self) -> str:
         return f"<Tenant(id={self.id})>"

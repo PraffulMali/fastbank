@@ -44,3 +44,7 @@ class LoanStatus(str, Enum):
     APPLIED = "APPLIED"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+
+class RuleType(str, Enum):
+    ACCOUNT = "ACCOUNT"
+    LOAN = "LOAN"
