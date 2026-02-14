@@ -17,6 +17,7 @@ from app.models.account import Account
 from app.models.transaction import Transaction
 from app.models.notification import Notification 
 from app.models.loan import Loan
+from app.models.loan_repayment import LoanRepayment
 from app.models.account_type import AccountType
 from app.models.loan_type import LoanType
 from app.models.interest_rule import InterestRule
@@ -37,6 +38,7 @@ __all__ = [
     "Transaction",
     "Notification",
     "Loan",
+    "LoanRepayment",
     "AccountType",
     "LoanType",
     "InterestRule",

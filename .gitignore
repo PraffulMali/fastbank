@@ -12,3 +12,5 @@ wheels/
 scripts/
 
 *.md
+
+celerybeat-schedule.db

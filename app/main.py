@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, tenant, user, account, transaction, loan, account_type, loan_type, interest_rule
 from app.routers import websocket as ws_router
 from app.routers import notification
+from app.celery.app import celery_app
 
 app = FastAPI(
     title="FastBank API",
