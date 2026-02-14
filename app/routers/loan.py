@@ -30,9 +30,17 @@ async def apply_for_loan(
 ):
     """
     Apply for a loan (USER only).
-    - USER: Can apply for loan on their own account
-    - Requires: account_id, principal_amount, tenure_months, loan_purpose
-    - Interest rate is set automatically by the system
+    
+    Flow:
+    - USER provides: account_id, loan_type_id, principal_amount, tenure_months, loan_purpose
+    - System fetches interest rate from INTEREST_RULES based on loan_type_id
+    - Interest rate is stored as snapshot in loan record (preserves contract integrity)
+    - EMI is calculated and stored
+    - Loan is initialized with status=APPLIED, remaining_principal=principal_amount
+    - Notifications sent to USER (confirmation) and all ADMINs (new application alert)
+    
+    Restrictions:
+    - Only regular users can apply for loans
     - ADMIN/SUPER_ADMIN: Cannot access this endpoint
     """
     # Only regular users can apply for loans
@@ -55,9 +63,6 @@ async def apply_for_loan(
             current_user.id,
             current_user.tenant_id
         )
-        
-        # TODO (WebSocket): After loan created, notify admins in real-time
-        # await notify_admins_new_loan(current_user.tenant_id, loan)
         
         return loan
     except ValueError as e:
@@ -168,9 +173,22 @@ async def process_loan_application(
 ):
     """
     Approve or reject a loan application (ADMIN only).
-    - ADMIN: Reviews loan_purpose and decides to approve/reject
-    - On approval: loan status → APPROVED (transaction will be created later)
-    - On rejection: loan status → REJECTED with mandatory rejection_reason
+    
+    On APPROVAL:
+    - All operations are atomic within a single database transaction
+    - Updates loan status to APPROVED
+    - Records decision metadata (decided_by, decided_at)
+    - Creates CREDIT transaction for disbursement
+    - Updates account balance
+    - Sends notifications to user (approval + disbursement)
+    
+    On REJECTION:
+    - Updates loan status to REJECTED
+    - Stores rejection_reason (mandatory)
+    - Records decision metadata (decided_by, decided_at)
+    - Sends notification to user with rejection reason
+    
+    Critical: Uses atomic transaction boundary to ensure data consistency
     - SUPER_ADMIN: Cannot access this endpoint
     """
     loan = await LoanService.get_loan_by_id(db, loan_id)
@@ -194,12 +212,6 @@ async def process_loan_application(
             current_user.id,
             current_user.tenant_id
         )
-        
-        # TODO (WebSocket): After loan decision, notify user in real-time
-        # if decision.decision == "APPROVED":
-        #     await notify_user_loan_approved(updated_loan.user_id, updated_loan)
-        # else:
-        #     await notify_user_loan_rejected(updated_loan.user_id, updated_loan, decision.rejection_reason)
         
         return updated_loan
     except ValueError as e:
