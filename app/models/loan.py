@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from app.models.base import BaseModel
 from app.models.enums import LoanStatus
-
+from app.models.loan_type import LoanType
 if TYPE_CHECKING:
     from app.models.tenant import Tenant
     from app.models.user import User
@@ -48,7 +48,12 @@ class Loan(BaseModel):
         nullable=False,
         index=True
     )
-    
+    loan_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("loan_types.id", ondelete="RESTRICT"),
+        nullable=False
+    )
+
     principal_amount: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False
@@ -77,10 +82,25 @@ class Loan(BaseModel):
         comment="Reason for loan application"
     )
     
-    approved_by: Mapped[uuid.UUID | None] = mapped_column(
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True
+    )
+
+    remaining_principal: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False
+    )
+
+    rejection_reason: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True
+    )
+
+    emi_amount: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False
     )
     
     applied_at: Mapped[datetime] = mapped_column(
@@ -112,17 +132,29 @@ class Loan(BaseModel):
         back_populates="loans",
         lazy="selectin"
     )
-    
-    approver: Mapped["User | None"] = relationship(
+    loan_type: Mapped["LoanType"] = relationship(
+        "LoanType",
+        back_populates="loans",   
+        lazy="selectin"
+    )
+    decision_maker: Mapped["User | None"] = relationship(
         "User",
-        foreign_keys=[approved_by],
+        foreign_keys=[decided_by],
         lazy="selectin"
     )
     
     __table_args__ = (
         CheckConstraint("principal_amount > 0", name="check_principal_positive"),
         CheckConstraint("interest_rate >= 0 AND interest_rate <= 100", name="check_interest_valid"),
-        CheckConstraint("tenure_months > 0", name="check_tenure_positive")
+        CheckConstraint("tenure_months > 0", name="check_tenure_positive"),
+        CheckConstraint(
+            "remaining_principal >= 0 AND remaining_principal <= principal_amount",
+            name="check_remaining_principal_valid"
+        ),
+        CheckConstraint(
+            "emi_amount > 0",
+            name="check_emi_amount_positive"
+        )
     )
     
     def __repr__(self) -> str:

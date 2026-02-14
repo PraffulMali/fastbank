@@ -79,6 +79,14 @@ class User(BaseModel):
         lazy="selectin",
         foreign_keys="Loan.user_id"
     )
+    
+    decided_loans: Mapped[list["Loan"]] = relationship(
+        "Loan",
+        foreign_keys="Loan.decided_by",
+        back_populates="decision_maker",
+        lazy="selectin"
+    )
+
 
     __table_args__ = (
         CheckConstraint(
