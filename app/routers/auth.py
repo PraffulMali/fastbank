@@ -6,7 +6,6 @@ from app.database import get_db
 from app.schemas.auth import (
     UserLoginRequest, 
     UserLoginResponse, 
-    ChangePasswordRequest,
     TokenRefreshRequest,
     TokenRefreshResponse,
     UserLogoutRequest,
@@ -49,34 +48,6 @@ async def login(
         )
 
 
-@router.post("/change-password", status_code=status.HTTP_200_OK)
-async def change_password(
-    password_data: ChangePasswordRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    """
-    Change password endpoint - requires valid access token
-    User provides old password, new password, and confirm password
-    """
-    try:
-        await UserService.change_password(
-            db,
-            current_user.id,
-            password_data.old_password,
-            password_data.new_password
-        )
-        return {"message": "Password changed successfully"}
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to change password"
-        )
 
 
 @router.post("/refresh", response_model=TokenRefreshResponse, status_code=status.HTTP_200_OK)
@@ -198,16 +169,15 @@ async def forgot_password(
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
 async def reset_password(
-    token: str,
     reset_data: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Reset password endpoint - uses token from email (query param) to reset password
+    Reset password endpoint - uses token from request body to reset password
     """
     success = await UserService.reset_password_with_token(
         db,
-        token,
+        reset_data.token,
         reset_data.new_password
     )
     

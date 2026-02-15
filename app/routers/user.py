@@ -14,7 +14,8 @@ from app.schemas.user import (
     UserUpdate,
     UserListResponse,
     UserDetailResponse,
-    UserSelfResponse
+    UserSelfResponse,
+    ChangePasswordRequest
 )
 from app.services.user_service import UserService
 from app.dependencies import get_current_user, require_super_admin, require_admin
@@ -158,4 +159,34 @@ async def delete_user(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+async def change_password(
+    password_data: ChangePasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    """
+    Change password endpoint - requires valid access token
+    User provides old password, new password, and confirm password
+    """
+    try:
+        await UserService.change_password(
+            db,
+            current_user.id,
+            password_data.old_password,
+            password_data.new_password
+        )
+        return {"message": "Password changed successfully"}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to change password"
         )
