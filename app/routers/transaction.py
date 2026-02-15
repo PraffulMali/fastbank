@@ -13,7 +13,7 @@ from app.schemas.transaction import (
     TransactionDetailResponse
 )
 from app.services.transaction_service import TransactionService
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_user, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(
@@ -26,7 +26,7 @@ router = APIRouter(
 async def create_transfer(
     transfer_request: TransferRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_user)]
 ):
     """
     Initiate a transfer between accounts (USER only).
@@ -42,13 +42,6 @@ async def create_transfer(
     - Destination account must exist and be active
     - Cannot transfer to the same account
     """
-    # Only USER role can initiate transfers
-    if current_user.role != UserRole.USER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only regular users can initiate transfers"
-        )
-    
     try:
         debit_txn, credit_txn, reference_id = await TransactionService.initiate_transfer(
             db, transfer_request, current_user
@@ -101,7 +94,7 @@ async def create_transfer(
 @router.get("/", response_model=Page[TransactionResponse])
 async def list_transactions(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends()
 ):
     """
@@ -111,12 +104,7 @@ async def list_transactions(
     - ADMIN: See all transactions in their tenant (including inactive accounts)
     - SUPER_ADMIN: Cannot access this endpoint
     """
-    # SUPER_ADMIN cannot access transactions
-    if current_user.role == UserRole.SUPER_ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="SUPER_ADMIN cannot access transaction operations"
-        )
+
     
     try:
         return await TransactionService.list_transactions(db, current_user, paginator)
@@ -136,7 +124,7 @@ async def list_transactions(
 async def get_transaction(
     transaction_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_tenant_member)]
 ):
     """
     Get detailed transaction information with counterparty details.
@@ -150,12 +138,7 @@ async def get_transaction(
     - Counterparty account_number
     - Counterparty user_name
     """
-    # SUPER_ADMIN cannot access transactions
-    if current_user.role == UserRole.SUPER_ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="SUPER_ADMIN cannot access transaction operations"
-        )
+
     
     try:
         # Verify access permissions

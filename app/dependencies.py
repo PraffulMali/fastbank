@@ -161,3 +161,25 @@ async def require_tenant_member(
         )
         
     return current_user
+
+
+async def require_user(
+    current_user: Annotated[User, Depends(get_current_user)]
+) -> User:
+    """
+    Dependency to require USER role.
+    Explicitly blocks SUPER_ADMIN, ADMIN, and STAFF.
+    """
+    if current_user.role != UserRole.USER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only regular users can access this resource"
+        )
+        
+    if not current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User must belong to a tenant"
+        )
+        
+    return current_user

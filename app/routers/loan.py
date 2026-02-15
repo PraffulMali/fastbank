@@ -16,7 +16,7 @@ from app.schemas.loan import (
 )
 from app.services.loan_service import LoanService
 from app.services.advance_loan_repayment_service import AdvanceLoanRepaymentService
-from app.dependencies import get_current_user, require_tenant_admin
+from app.dependencies import get_current_user, require_tenant_admin, require_user
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(
@@ -29,7 +29,7 @@ router = APIRouter(
 async def apply_for_loan(
     loan_in: LoanCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_user)]
 ):
     """
     Apply for a loan (USER only).
@@ -46,19 +46,6 @@ async def apply_for_loan(
     - Only regular users can apply for loans
     - ADMIN/SUPER_ADMIN: Cannot access this endpoint
     """
-    # Only regular users can apply for loans
-    if current_user.role != UserRole.USER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only regular users can apply for loans"
-        )
-    
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User must belong to a tenant"
-        )
-    
     try:
         loan = await LoanService.create_loan_application(
             db,
@@ -78,25 +65,13 @@ async def apply_for_loan(
 @router.get("/me", response_model=list[LoanUserResponse])
 async def get_my_loans(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_user)]
 ):
     """
     Get all loan applications for current user (USER only).
     - USER: Can view their own loan history with loan_purpose and status
     - ADMIN/SUPER_ADMIN: Cannot access this endpoint
     """
-    if current_user.role != UserRole.USER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only regular users can access this endpoint"
-        )
-    
-    if not current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User must belong to a tenant"
-        )
-    
     loans = await LoanService.list_user_loans(
         db,
         current_user.id,
@@ -263,7 +238,7 @@ async def make_advance_loan_repayment(
     loan_id: uuid.UUID,
     repayment_request: AdvanceLoanRepaymentRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_user)]
 ):
     """
     Make an advance loan repayment (USER only).
@@ -312,13 +287,6 @@ async def make_advance_loan_repayment(
     - Loan must have remaining principal > 0
     - Account must have sufficient balance
     """
-    # Only regular users can make advance repayments on their own loans
-    if current_user.role != UserRole.USER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only regular users can make advance loan repayments"
-        )
-    
     success, message, details = await AdvanceLoanRepaymentService.process_advance_repayment(
         db=db,
         loan_id=loan_id,

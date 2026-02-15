@@ -162,12 +162,6 @@ class AccountService:
         current_user: User
     ):
         """Get accounts for the current regular user"""
-        if current_user.role != UserRole.USER:
-            raise PermissionError("Only regular users can access this endpoint. Admins don't have accounts.")
-        
-        if not current_user.tenant_id:
-            raise PermissionError("User must belong to a tenant")
-        
         accounts = await AccountService.list_user_accounts(
             db,
             current_user.id,

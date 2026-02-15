@@ -13,7 +13,7 @@ from app.schemas.account import (
     AccountUserResponse
 )
 from app.services.account_service import AccountService
-from app.dependencies import get_current_user, require_tenant_admin  # Import from dependencies
+from app.dependencies import get_current_user, require_tenant_admin, require_user  # Import from dependencies
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(
@@ -66,7 +66,7 @@ async def list_accounts(
 @router.get("/me", response_model=AccountUserResponse)
 async def get_my_accounts(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_user)]
 ):
     """
     Get all accounts for the current user (USER only).

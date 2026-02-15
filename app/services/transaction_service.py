@@ -256,8 +256,6 @@ class TransactionService:
         if current_user.role == UserRole.USER:
             query = TransactionService.get_user_transactions_query(current_user)
         elif current_user.role == UserRole.ADMIN:
-            if not current_user.tenant_id:
-                raise ValueError("Admin must belong to a tenant")
             query = TransactionService.get_tenant_transactions_query(current_user.tenant_id)
         else:
             raise PermissionError("Invalid role for transaction access")

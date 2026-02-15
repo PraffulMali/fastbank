@@ -12,7 +12,7 @@ from app.schemas.notification import (
     MarkAsReadRequest
 )
 from app.services.notification_service import NotificationService
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(
@@ -24,7 +24,7 @@ router = APIRouter(
 @router.get("/", response_model=Page[NotificationResponse])
 async def list_notifications(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
     unread_only: bool = Query(False, description="Filter for unread notifications only")
 ):
@@ -46,7 +46,7 @@ async def list_notifications(
 @router.get("/unread-count", response_model=UnreadCountResponse)
 async def get_unread_count(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_tenant_member)]
 ):
     """
     Get count of unread notifications for the current user.
@@ -60,7 +60,7 @@ async def get_unread_count(
 async def mark_notification_as_read(
     notification_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_tenant_member)]
 ):
     """
     Mark a specific notification as read.
@@ -89,7 +89,7 @@ async def mark_notification_as_read(
 @router.post("/mark-all-read", status_code=status.HTTP_200_OK)
 async def mark_all_as_read(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_tenant_member)]
 ):
     """
     Mark all notifications as read for the current user.
@@ -106,7 +106,7 @@ async def mark_all_as_read(
 async def delete_notification(
     notification_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_tenant_member)]
 ):
     """
     Delete (soft delete) a notification.
