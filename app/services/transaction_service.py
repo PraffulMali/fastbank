@@ -1,5 +1,6 @@
 from typing import Optional, Tuple
 import uuid
+import logging
 from decimal import Decimal
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,14 +10,18 @@ import asyncio
 from app.models.transaction import Transaction
 from app.models.account import Account
 from app.models.user import User
-from app.models.enums import TransactionType, TransactionStatus, ReferenceType, UserRole
+from app.models.enums import TransactionType, TransactionStatus, ReferenceType, UserRole, NotificationType
 from app.schemas.transaction import (
     TransferRequest,
+    DepositRequest,
     TransactionDetailResponse,
     CounterpartyInfo
 )
 from app.utils.pagination import Paginator, Page
 from app.tasks.background_tasks import TransactionBackgroundTasks
+from app.services.notification_service import NotificationService
+
+logger = logging.getLogger(__name__)
 
 
 class TransactionService:
@@ -130,6 +135,81 @@ class TransactionService:
         )
         
         return debit_transaction, credit_transaction, reference_id
+    
+    
+    @staticmethod
+    async def deposit(
+        db: AsyncSession,
+        deposit_request: DepositRequest,
+        current_user: User
+    ) -> Transaction:
+        """
+        Deposit cash into an account.
+        
+        Steps:
+        1. Get account by ID
+        2. Verify account belongs to current user
+        3. Create CREDIT transaction with ReferenceType.CASH and SUCCESS status
+        4. Update account balance
+        5. Return transaction
+        """
+        # 1. Get account
+        account_query = select(Account).where(
+            and_(
+                Account.id == deposit_request.account_id,
+                Account.is_active == True
+            )
+        )
+        account_result = await db.execute(account_query)
+        account = account_result.scalar_one_or_none()
+        
+        if not account:
+            raise ValueError("Account not found or inactive")
+        
+        # 2. Verify account belongs to current user
+        if account.user_id != current_user.id:
+            raise PermissionError("You can only deposit into your own accounts")
+        
+        # Convert amount to smallest unit (Paise)
+        amount_in_paise = int(deposit_request.amount * 100)
+        
+        # 3. Create CREDIT transaction
+        # For cash deposit, reference_id can be same as transaction ID or a new one
+        reference_id = uuid.uuid4()
+        
+        transaction = Transaction(
+            tenant_id=account.tenant_id,
+            account_id=account.id,
+            reference_id=reference_id,
+            transaction_type=TransactionType.CREDIT,
+            reference_type=ReferenceType.CASH,
+            amount=amount_in_paise,
+            status=TransactionStatus.SUCCESS # Cash deposit is usually instant
+        )
+        
+        # 4. Update account balance
+        account.balance += amount_in_paise
+        
+        db.add(transaction)
+        await db.commit()
+        await db.refresh(transaction)
+        
+        # 5. Send notification
+        try:
+            await NotificationService.create_notification(
+                db=db,
+                tenant_id=transaction.tenant_id,
+                user_id=account.user_id,
+                notification_type=NotificationType.TRANSACTION_SUCCESS,
+                message=f"Successfully deposited ₹{deposit_request.amount} into account {account.account_number}. New balance: ₹{account.balance / 100}",
+                reference_id=transaction.id,
+                reference_type="transaction"
+            )
+        except Exception as e:
+            # Don't fail the transaction if notification fails
+            logger.error(f"Failed to send notification for deposit: {e}")
+            
+        return transaction
     
     
     @staticmethod

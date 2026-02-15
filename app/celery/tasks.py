@@ -76,23 +76,23 @@ from app.services.loan_repayment_service import LoanRepaymentService
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task()
-def print_user_count():
-    """Test task to print user count."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(_print_user_count_task())
-    loop.close()
+# @celery_app.task()
+# def print_user_count():
+#     """Test task to print user count."""
+#     loop = asyncio.new_event_loop()
+#     asyncio.set_event_loop(loop)
+#     loop.run_until_complete(_print_user_count_task())
+#     loop.close()
 
 
-async def _print_user_count_task():
-    """Async implementation of user count task."""
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(func.count()).select_from(User)
-        )
-        total_users = result.scalar_one()
-        logger.warning(f"[Celery Task] Total Users = {total_users}")
+# async def _print_user_count_task():
+#     """Async implementation of user count task."""
+#     async with AsyncSessionLocal() as db:
+#         result = await db.execute(
+#             select(func.count()).select_from(User)
+#         )
+#         total_users = result.scalar_one()
+#         logger.warning(f"[Celery Task] Total Users = {total_users}")
 
 
 @celery_app.task(name="app.celery.tasks.process_monthly_emi_deductions")

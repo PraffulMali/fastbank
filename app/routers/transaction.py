@@ -8,6 +8,7 @@ from app.models.user import User
 from app.models.enums import UserRole
 from app.schemas.transaction import (
     TransferRequest,
+    DepositRequest,
     TransferResponse,
     TransactionResponse,
     TransactionDetailResponse
@@ -77,6 +78,49 @@ async def create_transfer(
                 created_at=credit_txn.created_at,
                 updated_at=credit_txn.updated_at
             )
+        )
+    
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+
+
+@router.post("/deposit", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
+async def create_deposit(
+    deposit_request: DepositRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_user)]
+):
+    """
+    Deposit cash into an account (USER only).
+    
+    - USER: Can deposit into their own accounts
+    - Creates a CREDIT transaction with CASH reference type
+    - Status is set to SUCCESS immediately
+    - Balance is updated immediately
+    """
+    try:
+        transaction = await TransactionService.deposit(
+            db, deposit_request, current_user
+        )
+        
+        return TransactionResponse(
+            id=transaction.id,
+            account_id=transaction.account_id,
+            account_number=transaction.account.account_number,
+            transaction_type=transaction.transaction_type.value,
+            reference_type=transaction.reference_type.value,
+            amount=transaction.amount,
+            status=transaction.status.value,
+            created_at=transaction.created_at,
+            updated_at=transaction.updated_at
         )
     
     except ValueError as e:

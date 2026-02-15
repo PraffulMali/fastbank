@@ -22,6 +22,22 @@ class TransferRequest(BaseModel):
         return v
 
 
+class DepositRequest(BaseModel):
+    """
+    Schema for depositing cash into an account.
+    """
+    account_id: uuid.UUID
+    amount: Decimal = Field(..., gt=0, decimal_places=2)
+    
+    @field_validator("amount")
+    def validate_amount(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("Amount must be greater than 0")
+        if v.as_tuple().exponent < -2:
+            raise ValueError("Amount cannot have more than 2 decimal places")
+        return v
+
+
 class TransactionResponse(BaseModel):
     """
     Schema for single transaction response.
