@@ -40,14 +40,7 @@ class UserCreateByAdmin(UserBase):
     state: str = Field(..., min_length=2, max_length=100)
     postal_code: str = Field(..., min_length=4, max_length=20)
     country: str = Field(default="India", max_length=100)
-    account_type: str = Field(..., description="Type of account: SAVINGS or CURRENT")
-    
-    @field_validator("account_type")
-    def validate_account_type(cls, v: str) -> str:
-        v = v.upper()
-        if v not in ["SAVINGS", "CURRENT"]:
-            raise ValueError("Account type must be either SAVINGS or CURRENT")
-        return v
+    account_type_id: uuid.UUID = Field(..., description="ID of the account type")
     
     @field_validator("pan_number")
     def validate_pan(cls, v: str) -> str:

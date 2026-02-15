@@ -1,7 +1,6 @@
 from app.models.base import BaseModel
 from app.models.enums import (
     UserRole, 
-    AccountType, 
     TransactionType, 
     TransactionStatus, 
     ReferenceType,
@@ -9,7 +8,6 @@ from app.models.enums import (
     LoanStatus,
     RuleType
 )
-from app.models.enums import UserRole, LoanStatus, AccountType
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.user_identity import UserIdentity
@@ -25,7 +23,6 @@ from app.models.interest_rule import InterestRule
 __all__ = [
     "BaseModel", 
     "UserRole", 
-    "AccountType",
     "TransactionType",
     "TransactionStatus",
     "ReferenceType",
@@ -44,4 +41,3 @@ __all__ = [
     "InterestRule",
     "RuleType"
 ]
-

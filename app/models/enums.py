@@ -8,9 +8,7 @@ class UserRole(str, Enum):
     USER = "USER"
 
 
-class AccountType(str, Enum):
-    SAVINGS = "SAVINGS"
-    CURRENT = "CURRENT"
+
 
 
 class TransactionType(str, Enum):
@@ -44,8 +42,8 @@ class LoanStatus(str, Enum):
     APPLIED = "APPLIED"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
-    CLOSED = "CLOSED"  # Loan fully repaid through normal EMI schedule
-    FORECLOSED = "FORECLOSED"  # Loan closed early through advance payment
+    CLOSED = "CLOSED"  
+    FORECLOSED = "FORECLOSED" 
 
 class RuleType(str, Enum):
     ACCOUNT = "ACCOUNT"
