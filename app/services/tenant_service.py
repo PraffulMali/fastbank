@@ -5,6 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from app.models.tenant import Tenant
+from app.models.account_type import AccountType
+from app.models.loan_type import LoanType
+from app.models.interest_rule import InterestRule
+from app.models.enums import RuleType
 from app.schemas.tenant import TenantCreate, TenantUpdate
 from app.utils.pagination import Paginator, Page
 
@@ -20,6 +24,32 @@ class TenantService:
             
         new_tenant = Tenant(name=tenant_in.name)
         db.add(new_tenant)
+        await db.flush()  # Flush to get the tenant ID
+        
+        # Create default Account Types
+        savings_type = AccountType(tenant_id=new_tenant.id, name="SAVINGS")
+        current_type = AccountType(tenant_id=new_tenant.id, name="CURRENT")
+        db.add_all([savings_type, current_type])
+        await db.flush() # Flush to get IDs
+        
+        # Create default Loan Types
+        personal_loan = LoanType(tenant_id=new_tenant.id, name="PERSONAL")
+        vehicle_loan = LoanType(tenant_id=new_tenant.id, name="VEHICLE")
+        db.add_all([personal_loan, vehicle_loan])
+        
+        # Create default Interest Rule for SAVINGS account (4%)
+        # rule_type=ACCOUNT, min_balance=0, max_balance=None (unlimited), interest_rate=4.0
+        default_interest = InterestRule(
+            tenant_id=new_tenant.id,
+            rule_type=RuleType.ACCOUNT,
+            account_type_id=savings_type.id,
+            min_balance=0,
+            max_balance=None,
+            interest_rate=4.0,
+            is_active=True
+        )
+        db.add(default_interest)
+
         await db.commit()
         await db.refresh(new_tenant)
         return new_tenant

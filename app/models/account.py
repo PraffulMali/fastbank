@@ -14,13 +14,14 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import BaseModel
-from app.models.enums import AccountType
+
 
 if TYPE_CHECKING:
     from app.models.tenant import Tenant
     from app.models.user import User
     from app.models.transaction import Transaction 
     from app.models.loan import Loan
+    from app.models.account_type import AccountType
 
 
 class Account(BaseModel):
@@ -47,11 +48,16 @@ class Account(BaseModel):
         index=True
     )
     
-    account_type: Mapped[AccountType] = mapped_column(
-        SQLEnum(AccountType, name="account_type_enum", create_constraint=True),
+    account_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("account_types.id", ondelete="RESTRICT"),
         nullable=False,
-        default=AccountType.SAVINGS,
         index=True
+    )
+    
+    account_type: Mapped["AccountType"] = relationship(
+        "AccountType",
+        lazy="selectin"
     )
     
     balance: Mapped[int] = mapped_column(
@@ -94,8 +100,8 @@ class Account(BaseModel):
     
     __table_args__ = (
         CheckConstraint("balance >= 0", name="check_balance_non_negative"),
-        Index("ix_accounts_tenant_user_type", "tenant_id", "user_id", "account_type", unique=True),
+        Index("ix_accounts_tenant_user_type", "tenant_id", "user_id", "account_type_id", unique=True),
     )
     
     def __repr__(self) -> str:
-        return f"<Account(id={self.id}, type={self.account_type})>"
+        return f"<Account(id={self.id}, type_id={self.account_type_id})>"
