@@ -29,20 +29,6 @@ async def create_interest_rule(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Create a new interest rule (ADMIN only).
-    
-    **For ACCOUNT rules:**
-    - Requires: account_type_id, min_balance, interest_rate
-    - Optional: max_balance (NULL = unlimited)
-    - Must NOT have: loan_type_id
-    
-    **For LOAN rules:**
-    - Requires: loan_type_id, interest_rate
-    - Must NOT have: account_type_id, min_balance, max_balance
-    
-    Validation is automatic - just provide the right fields!
-    """
     
     try:
         rule = await InterestRuleService.create_interest_rule(
@@ -62,11 +48,6 @@ async def list_interest_rules(
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends()
 ):
-    """
-    List all interest rules in tenant.
-    - Accessible to: Tenant Admin, Tenant User
-    - Not accessible to: Super Admin
-    """
     
     return await InterestRuleService.list_interest_rules(
         db, current_user.tenant_id, paginator
@@ -79,11 +60,6 @@ async def get_interest_rule(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)]
 ):
-    """
-    Get interest rule details.
-    - Accessible to: Tenant Admin, Tenant User
-    - Not accessible to: Super Admin
-    """
     
     rule = await InterestRuleService.get_interest_rule_detail(
         db, rule_id, current_user.tenant_id
@@ -105,12 +81,6 @@ async def update_interest_rule(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Update interest rule (ADMIN only).
-    - Only interest_rate can be updated
-    - Cannot change rule_type, account_type, loan_type, or balance ranges
-    - To change other fields, delete and create new rule
-    """
     
     try:
         rule = await InterestRuleService.update_interest_rule(
@@ -138,11 +108,6 @@ async def delete_interest_rule(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Delete interest rule (ADMIN only) - HARD DELETE.
-    - No protection checks (safe to delete)
-    - Rules are configuration, not transactional data
-    """
     
     try:
         await InterestRuleService.delete_interest_rule(

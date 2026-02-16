@@ -97,17 +97,6 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(name="app.celery.tasks.process_monthly_emi_deductions")
 def process_monthly_emi_deductions():
-    """
-    Process monthly EMI deductions for all active approved loans.
-    This task runs on the 1st of every month and:
-    1. Fetches all active approved loans with remaining principal > 0
-    2. For each loan:
-       - Checks if account has sufficient balance
-       - If yes: Deducts EMI, creates transaction, updates balance, creates repayment record
-       - If no: Sends notification and email to user, notifies admins
-    3. All operations are atomic per loan using savepoints (begin_nested)
-    4. If one loan fails, others continue processing
-    """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -123,13 +112,6 @@ def process_monthly_emi_deductions():
 
 
 async def _process_monthly_emi_deductions_task():
-    """
-    Async implementation of monthly EMI deduction task.
-    
-    IMPORTANT: This creates a session with autocommit=False (default).
-    The process_monthly_emis method uses begin_nested() for each loan,
-    so we must commit the outer transaction after all loans are processed.
-    """
     async with AsyncSessionLocal() as db:
         try:
             stats = await LoanRepaymentService.process_monthly_emis(db)
@@ -149,10 +131,6 @@ from app.services.interest_rule_service import InterestRuleService
 
 @celery_app.task(name="app.celery.tasks.process_monthly_interest_accrual")
 def process_monthly_interest_accrual():
-    """
-    Process monthly interest accrual for all accounts with active interest rules.
-    Runs on the 2nd day of every month.
-    """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
@@ -169,9 +147,6 @@ def process_monthly_interest_accrual():
 
 
 async def _process_monthly_interest_accrual_task():
-    """
-    Async implementation of monthly interest accrual task.
-    """
     async with AsyncSessionLocal() as db:
         try:
             stats = await InterestRuleService.process_monthly_interest_accrual(db)

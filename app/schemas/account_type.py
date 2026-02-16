@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AccountTypeCreate(BaseModel):
-    """Schema for creating account type (ADMIN only)"""
     name: str = Field(..., min_length=2, max_length=100, description="Account type name")
     
     @field_validator("name")
@@ -17,7 +16,6 @@ class AccountTypeCreate(BaseModel):
 
 
 class AccountTypeUpdate(BaseModel):
-    """Schema for updating account type"""
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     is_active: Optional[bool] = None
     
@@ -32,7 +30,6 @@ class AccountTypeUpdate(BaseModel):
 
 
 class AccountTypeResponse(BaseModel):
-    """Schema for account type response"""
     id: uuid.UUID
     tenant_id: uuid.UUID
     name: str
@@ -45,7 +42,6 @@ class AccountTypeResponse(BaseModel):
 
 
 class AccountTypeWithRulesResponse(BaseModel):
-    """Schema for account type with its interest rules"""
     id: uuid.UUID
     tenant_id: uuid.UUID
     name: str

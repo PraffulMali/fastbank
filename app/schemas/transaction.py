@@ -6,9 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class TransferRequest(BaseModel):
-    """
-    Schema for initiating a transfer between accounts.
-    """
     source_account_number: str = Field(..., min_length=15, max_length=20)
     destination_account_number: str = Field(..., min_length=15, max_length=20)
     amount: Decimal = Field(..., gt=0, decimal_places=2)
@@ -23,9 +20,6 @@ class TransferRequest(BaseModel):
 
 
 class DepositRequest(BaseModel):
-    """
-    Schema for depositing cash into an account.
-    """
     account_id: uuid.UUID
     amount: Decimal = Field(..., gt=0, decimal_places=2)
     
@@ -39,10 +33,6 @@ class DepositRequest(BaseModel):
 
 
 class TransactionResponse(BaseModel):
-    """
-    Schema for single transaction response.
-    Used in list view.
-    """
     id: uuid.UUID
     account_id: uuid.UUID
     account_number: str
@@ -63,9 +53,6 @@ class TransactionResponse(BaseModel):
 
 
 class CounterpartyInfo(BaseModel):
-    """
-    Information about the other party in a transfer.
-    """
     tenant_id: uuid.UUID
     account_number: str
     user_name: str
@@ -74,10 +61,6 @@ class CounterpartyInfo(BaseModel):
 
 
 class TransactionDetailResponse(BaseModel):
-    """
-    Schema for detailed transaction response.
-    Includes counterparty information.
-    """
     id: uuid.UUID
     tenant_id: uuid.UUID
     account_id: uuid.UUID
@@ -101,10 +84,6 @@ class TransactionDetailResponse(BaseModel):
 
 
 class TransferResponse(BaseModel):
-    """
-    Schema for transfer initiation response.
-    Returns both debit and credit transaction details.
-    """
     reference_id: uuid.UUID
     debit_transaction: TransactionResponse
     credit_transaction: TransactionResponse

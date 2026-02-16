@@ -19,10 +19,6 @@ class LoanTypeService:
         loan_type_in: LoanTypeCreate,
         tenant_id: uuid.UUID
     ) -> LoanType:
-        """
-        Create a new loan type for a tenant.
-        Validates that name is unique within the tenant.
-        """
         # Check for duplicate name within tenant
         existing_query = select(LoanType).where(
             and_(
@@ -53,7 +49,6 @@ class LoanTypeService:
         db: AsyncSession,
         loan_type_id: uuid.UUID
     ) -> Optional[LoanType]:
-        """Get loan type by ID"""
         return await db.get(LoanType, loan_type_id)
     
     @staticmethod
@@ -63,10 +58,6 @@ class LoanTypeService:
         paginator: Paginator,
         include_inactive: bool = False
     ) -> Page:
-        """
-        List all loan types for a tenant.
-        By default, only active types are shown.
-        """
         query = select(LoanType).where(LoanType.tenant_id == tenant_id)
         
         if not include_inactive:
@@ -83,10 +74,6 @@ class LoanTypeService:
         loan_type_update: LoanTypeUpdate,
         tenant_id: uuid.UUID
     ) -> Optional[LoanType]:
-        """
-        Update loan type.
-        Validates tenant ownership.
-        """
         loan_type = await db.get(LoanType, loan_type_id)
         if not loan_type:
             return None
@@ -130,13 +117,6 @@ class LoanTypeService:
         loan_type_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> None:
-        """
-        Hard delete a loan type with protection.
-        Checks if:
-        1. Any loans reference this loan type
-        2. Any interest rules reference this loan type
-        Raises ValueError if either exist.
-        """
         loan_type = await db.get(LoanType, loan_type_id)
         if not loan_type:
             raise ValueError("Loan type not found")
@@ -181,10 +161,6 @@ class LoanTypeService:
         loan_type_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> Optional[dict]:
-        """
-        Get loan type with its interest rate.
-        Returns dict with loan type info and interest rate from interest_rules.
-        """
         loan_type = await db.get(LoanType, loan_type_id)
         if not loan_type or loan_type.tenant_id != tenant_id:
             return None

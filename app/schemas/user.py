@@ -18,7 +18,6 @@ class UserBase(BaseModel):
 
 
 class UserCreateBySuperAdmin(UserBase):
-    """Schema for SUPER_ADMIN creating an ADMIN user"""
     tenant_id: uuid.UUID
     role: str = Field(default="ADMIN")
     
@@ -30,7 +29,6 @@ class UserCreateBySuperAdmin(UserBase):
 
 
 class UserCreateByAdmin(UserBase):
-    """Schema for ADMIN creating users in their tenant with KYC details"""
     phone_number: str = Field(..., min_length=10, max_length=20)
     date_of_birth: date
     pan_number: str = Field(..., min_length=10, max_length=10)
@@ -64,7 +62,6 @@ class ChangePasswordRequest(BaseModel):
     
     @field_validator("new_password")
     def validate_new_password(cls, v: str) -> str:
-        """Validate password strength"""
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters long")
         
@@ -84,14 +81,12 @@ class ChangePasswordRequest(BaseModel):
     
     @field_validator("confirm_password")
     def passwords_match(cls, v: str, info) -> str:
-        """Validate that passwords match"""
         if 'new_password' in info.data and v != info.data['new_password']:
             raise ValueError("Passwords do not match")
         return v
 
 
 class UserUpdate(BaseModel):
-    """Schema for updating user details"""
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     is_active: Optional[bool] = None
     
@@ -106,7 +101,6 @@ class UserUpdate(BaseModel):
 
 
 class UserIdentityResponse(BaseModel):
-    """User identity/KYC details"""
     phone_number: str
     date_of_birth: date
     pan_number: str
@@ -123,7 +117,6 @@ class UserIdentityResponse(BaseModel):
 
 
 class UserListResponse(BaseModel):
-    """Essential fields for list view"""
     id: uuid.UUID
     email: str
     full_name: str
@@ -139,7 +132,6 @@ class UserListResponse(BaseModel):
 
 
 class UserDetailResponse(BaseModel):
-    """Full user details for admins"""
     id: uuid.UUID
     email: str
     full_name: str
@@ -156,7 +148,6 @@ class UserDetailResponse(BaseModel):
 
 
 class UserSelfResponse(BaseModel):
-    """Limited user details for regular users viewing their own profile"""
     id: uuid.UUID
     email: str
     full_name: str

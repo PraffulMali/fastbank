@@ -12,16 +12,6 @@ from app.utils.websocket_manager import get_websocket_manager
 
 
 class NotificationService:
-    """
-    Service for managing notifications.
-    
-    Features:
-    - Create and persist notifications
-    - Send real-time updates via WebSocket
-    - Fetch notification history
-    - Mark notifications as read
-    - Get unread count
-    """
     
     @staticmethod
     async def create_notification(
@@ -34,22 +24,6 @@ class NotificationService:
         reference_type: Optional[str] = None,
         send_websocket: bool = True
     ) -> Notification:
-        """
-        Create a notification and optionally send via WebSocket.
-        
-        Args:
-            db: Database session
-            tenant_id: Tenant ID
-            user_id: User ID to notify
-            notification_type: Type of notification
-            message: Notification message
-            reference_id: Optional reference to related entity
-            reference_type: Type of reference (transaction, loan, etc.)
-            send_websocket: Whether to send real-time update
-        
-        Returns:
-            Created notification
-        """
         notification = Notification(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -72,9 +46,6 @@ class NotificationService:
     
     @staticmethod
     async def send_websocket_notification(notification: Notification):
-        """
-        Send notification via WebSocket to the user.
-        """
         manager = get_websocket_manager()
         
         message = {
@@ -99,9 +70,6 @@ class NotificationService:
         paginator: Paginator,
         unread_only: bool = False
     ) -> Page:
-        """
-        Get paginated notifications for a user.
-        """
         query = select(Notification).where(
             Notification.user_id == user_id
         )
@@ -119,9 +87,6 @@ class NotificationService:
         db: AsyncSession,
         user_id: uuid.UUID
     ) -> int:
-        """
-        Get count of unread notifications for a user.
-        """
         query = select(func.count()).select_from(Notification).where(
             and_(
                 Notification.user_id == user_id,
@@ -137,10 +102,6 @@ class NotificationService:
         notification_id: uuid.UUID,
         user_id: uuid.UUID
     ) -> Optional[Notification]:
-        """
-        Mark a notification as read.
-        Verifies the notification belongs to the user.
-        """
         notification = await db.get(Notification, notification_id)
         
         if not notification:
@@ -160,10 +121,6 @@ class NotificationService:
         db: AsyncSession,
         user_id: uuid.UUID
     ) -> int:
-        """
-        Mark all notifications as read for a user.
-        Returns count of updated notifications.
-        """
         from sqlalchemy import update
         
         stmt = (
@@ -188,10 +145,6 @@ class NotificationService:
         notification_id: uuid.UUID,
         user_id: uuid.UUID
     ) -> bool:
-        """
-        Delete a notification (soft delete via is_active).
-        Verifies the notification belongs to the user.
-        """
         notification = await db.get(Notification, notification_id)
         
         if not notification:

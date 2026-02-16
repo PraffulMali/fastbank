@@ -71,7 +71,6 @@ class UserService:
         old_password: str,
         new_password: str
     ) -> bool:
-        """Change user password"""
         user = await db.get(User, user_id)
         if not user:
             raise ValueError("User not found")
@@ -93,7 +92,6 @@ class UserService:
         access_token_jti: Optional[str] = None,
         access_token_exp: Optional[int] = None
     ) -> TokenRefreshResponse:
-        """Refresh access token using refresh token"""
         try:
             # Decode refresh token
             payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
@@ -169,10 +167,6 @@ class UserService:
         db: AsyncSession,
         user_in: UserCreateBySuperAdmin
     ) -> tuple[User, str, str]:
-        """
-        SUPER_ADMIN creates an ADMIN user for a specific tenant.
-        Returns: (User, verification_token, temp_password)
-        """
         # Validate tenant exists and is active
         tenant = await db.get(Tenant, user_in.tenant_id)
         if not tenant:
@@ -214,10 +208,6 @@ class UserService:
         admin_tenant_id: uuid.UUID,
         admin_user_id: uuid.UUID
     ) -> tuple[User, str, str]:
-        """
-        ADMIN creates a USER within their own tenant with KYC details.
-        Returns: (User, verification_token, temp_password)
-        """
         # Check if email already exists
         query = select(User).where(User.email == user_in.email)
         result = await db.execute(query)
@@ -312,7 +302,6 @@ class UserService:
         user_in: Union[UserCreateBySuperAdmin, UserCreateByAdmin],
         current_user: User
     ) -> tuple[User, str, str]:
-        """Unified user creation handling role-based branching"""
         if current_user.role == UserRole.SUPER_ADMIN:
             if not isinstance(user_in, UserCreateBySuperAdmin):
                 raise ValueError("SUPER_ADMIN must provide tenant_id")
@@ -330,7 +319,6 @@ class UserService:
 
     @staticmethod
     def get_users_query(current_user: User):
-        """Get base query for listing users based on current user's role"""
         if current_user.role == UserRole.SUPER_ADMIN:
             return select(User).where(User.role == UserRole.ADMIN)
         else:  # ADMIN
@@ -342,7 +330,6 @@ class UserService:
         current_user: User,
         paginator: Paginator
     ) -> Page:
-        """List users with pagination, centralizing query construction in service layer"""
         query = UserService.get_users_query(current_user)
         return await paginator.paginate(db, query)
 
@@ -351,7 +338,6 @@ class UserService:
         db: AsyncSession,
         user_id: uuid.UUID
     ) -> Optional[User]:
-        """Get user by ID with user_identity eagerly loaded"""
         
         query = select(User).where(User.id == user_id).options(
             selectinload(User.user_identity)
@@ -365,7 +351,6 @@ class UserService:
         user_id: uuid.UUID, 
         current_user: User
     ) -> Union[UserDetailResponse, UserSelfResponse]:
-        """Retrieve user and validate permissions based on role"""
         user = await UserService.get_user_by_id(db, user_id)
         if not user:
             raise ValueError("User not found")
@@ -391,7 +376,6 @@ class UserService:
         user_id: uuid.UUID,
         user_update: UserUpdate
     ) -> Optional[User]:
-        """Update user details"""
         user = await db.get(User, user_id)
         if not user:
             return None
@@ -417,7 +401,6 @@ class UserService:
         user_update: UserUpdate,
         current_user: User
     ) -> User:
-        """Update user with role-based permission checks"""
         user = await UserService.get_user_by_id(db, user_id)
         if not user:
             raise ValueError("User not found")
@@ -437,7 +420,6 @@ class UserService:
         user_id: uuid.UUID,
         current_user: User
     ):
-        """Soft delete user with role-based permission checks"""
         user = await UserService.get_user_by_id(db, user_id)
         if not user:
             raise ValueError("User not found")
@@ -456,7 +438,6 @@ class UserService:
         db: AsyncSession,
         user_id: uuid.UUID
     ) -> Optional[User]:
-        """Soft delete a user"""
         user = await db.get(User, user_id)
         if not user:
             return None
@@ -473,7 +454,6 @@ class UserService:
 
     @staticmethod
     async def verify_user_email(db: AsyncSession, token: str) -> bool:
-        """Verify user email using token from Redis"""
         
         hashed_token = hash_token(token)
         redis = await get_redis()
@@ -498,7 +478,6 @@ class UserService:
         
     @staticmethod
     async def blacklist_token(token: str) -> bool:
-        """Decode token and blacklist its jti"""
         from jose import jwt, JWTError
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
@@ -513,10 +492,6 @@ class UserService:
 
     @staticmethod
     async def logout_user(jti: str, exp: int) -> bool:
-        """
-        Logout user by storing token jti in Redis blacklist
-        The blacklist entry will expire when the token itself expires
-        """
         
         redis = await get_redis()
         
@@ -536,10 +511,6 @@ class UserService:
 
     @staticmethod
     async def request_password_reset(db: AsyncSession, email: str) -> Optional[tuple[User, str]]:
-        """
-        Request password reset - sends email only if user is active and email is verified.
-        Returns: (User, reset_token) or None if user doesn't meet criteria
-        """
         query = select(User).where(User.email == email)
         result = await db.execute(query)
         user = result.scalar_one_or_none()
@@ -564,10 +535,6 @@ class UserService:
 
     @staticmethod
     async def reset_password_with_token(db: AsyncSession, token: str, new_password: str) -> bool:
-        """
-        Reset password using the token from Redis.
-        Returns True if successful, False otherwise.
-        """
         
         hashed_token = hash_token(token)
         redis = await get_redis()
@@ -594,10 +561,6 @@ class UserService:
 
     @staticmethod
     async def resend_verification_email(db: AsyncSession, email: str) -> Optional[tuple[User, str]]:
-        """
-        Resend verification email - only if user exists and email is not verified.
-        Returns: (User, verification_token) or None if user doesn't meet criteria
-        """
         query = select(User).where(User.email == email)
         result = await db.execute(query)
         user = result.scalar_one_or_none()

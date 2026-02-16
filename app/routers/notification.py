@@ -28,16 +28,6 @@ async def list_notifications(
     paginator: Paginator = Depends(),
     unread_only: bool = Query(False, description="Filter for unread notifications only")
 ):
-    """
-    Get paginated list of notifications for the current user.
-    
-    Query Parameters:
-    - page: Page number (default: 1)
-    - page_size: Items per page (default: 10, max: 100)
-    - unread_only: Show only unread notifications (default: false)
-    
-    Returns notifications ordered by creation date (newest first).
-    """
     return await NotificationService.get_user_notifications(
         db, current_user.id, paginator, unread_only
     )
@@ -48,10 +38,6 @@ async def get_unread_count(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)]
 ):
-    """
-    Get count of unread notifications for the current user.
-    Useful for displaying notification badges.
-    """
     count = await NotificationService.get_unread_count(db, current_user.id)
     return UnreadCountResponse(unread_count=count)
 
@@ -62,10 +48,6 @@ async def mark_notification_as_read(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)]
 ):
-    """
-    Mark a specific notification as read.
-    Only the owner of the notification can mark it as read.
-    """
     try:
         notification = await NotificationService.mark_as_read(
             db, notification_id, current_user.id
@@ -91,10 +73,6 @@ async def mark_all_as_read(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)]
 ):
-    """
-    Mark all notifications as read for the current user.
-    Returns count of notifications that were marked as read.
-    """
     count = await NotificationService.mark_all_as_read(db, current_user.id)
     return {
         "message": f"Marked {count} notification(s) as read",
@@ -108,10 +86,6 @@ async def delete_notification(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)]
 ):
-    """
-    Delete (soft delete) a notification.
-    Only the owner of the notification can delete it.
-    """
     try:
         deleted = await NotificationService.delete_notification(
             db, notification_id, current_user.id

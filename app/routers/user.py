@@ -33,11 +33,6 @@ async def create_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_admin)]
 ):
-    """
-    Create a new user.
-    - SUPER_ADMIN: Can create ADMIN users for any tenant
-    - ADMIN: Can create USER users within their own tenant
-    """
     try:
         new_user, token, temp_password = await UserService.create_user(db, user_in, current_user)
         
@@ -64,11 +59,6 @@ async def list_users(
     current_user: Annotated[User, Depends(require_admin)],
     paginator: Paginator = Depends()
 ):
-    """
-    List users based on role:
-    - SUPER_ADMIN: Lists all ADMIN users across all tenants
-    - ADMIN: Lists all users within their own tenant
-    """
     return await UserService.list_users(db, current_user, paginator)
 
 
@@ -78,12 +68,6 @@ async def get_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """
-    Retrieve user details:
-    - SUPER_ADMIN: Can view any ADMIN user
-    - ADMIN: Can view any user in their tenant
-    - USER: Can only view their own profile (limited fields)
-    """
     try:
         return await UserService.get_user_with_permissions(db, user_id, current_user)
     except ValueError as e:
@@ -105,11 +89,6 @@ async def update_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_admin)]
 ):
-    """
-    Update user details.
-    - SUPER_ADMIN: Can update any ADMIN user
-    - ADMIN: Can update any user in their tenant
-    """
     try:
         updated_user = await UserService.update_user_with_permissions(
             db, user_id, user_update, current_user
@@ -138,11 +117,6 @@ async def delete_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_admin)]
 ):
-    """
-    Soft delete a user.
-    - SUPER_ADMIN: Can delete any ADMIN user
-    - ADMIN: Can delete any user in their tenant
-    """
     try:
         await UserService.soft_delete_user_with_permissions(db, user_id, current_user)
     except ValueError as e:
@@ -168,10 +142,6 @@ async def change_password(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """
-    Change password endpoint - requires valid access token
-    User provides old password, new password, and confirm password
-    """
     try:
         await UserService.change_password(
             db,

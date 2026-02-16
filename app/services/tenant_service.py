@@ -82,7 +82,6 @@ class TenantService:
 
     @staticmethod
     def get_tenants_query():
-        """Get base query for listing tenants"""
         return select(Tenant)
 
     @staticmethod
@@ -90,7 +89,6 @@ class TenantService:
         db: AsyncSession,
         paginator: Paginator
     ) -> Page:
-        """List tenants with pagination, centralizing query construction in service layer"""
         query = TenantService.get_tenants_query()
         return await paginator.paginate(db, query)
 

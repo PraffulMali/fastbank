@@ -28,11 +28,6 @@ async def create_account_type(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Create a new account type (ADMIN only).
-    - Creates account type for admin's tenant
-    - Name must be unique within tenant
-    """
     
     try:
         account_type = await AccountTypeService.create_account_type(
@@ -53,13 +48,6 @@ async def list_account_types(
     paginator: Paginator = Depends(),
     include_inactive: bool = False
 ):
-    """
-    List all account types in tenant.
-    - Accessible to: Tenant Admin, Tenant User
-    - Not accessible to: Super Admin
-    - Shows only active types by default
-    - Set include_inactive=true to see all
-    """
     
     return await AccountTypeService.list_account_types(
         db, current_user.tenant_id, paginator, include_inactive
@@ -72,11 +60,6 @@ async def get_account_type(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)]
 ):
-    """
-    Get account type details with interest rules.
-    - Accessible to: Tenant Admin, Tenant User
-    - Not accessible to: Super Admin
-    """
     
     account_type = await AccountTypeService.get_account_type_with_rules(
         db, account_type_id, current_user.tenant_id
@@ -98,11 +81,6 @@ async def update_account_type(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Update account type (ADMIN only).
-    - Can update name and is_active status
-    - Name must remain unique within tenant
-    """
     
     try:
         account_type = await AccountTypeService.update_account_type(
@@ -135,12 +113,6 @@ async def delete_account_type(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Delete account type (ADMIN only) - HARD DELETE.
-    - Checks if any interest rules use this account type
-    - Fails if rules exist (delete rules first)
-    - Succeeds only if no rules reference it
-    """
     
     try:
         await AccountTypeService.delete_account_type(

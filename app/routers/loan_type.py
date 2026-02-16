@@ -28,11 +28,6 @@ async def create_loan_type(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Create a new loan type (ADMIN only).
-    - Creates loan type for admin's tenant
-    - Name must be unique within tenant
-    """
     
     try:
         loan_type = await LoanTypeService.create_loan_type(
@@ -53,13 +48,6 @@ async def list_loan_types(
     paginator: Paginator = Depends(),
     include_inactive: bool = False
 ):
-    """
-    List all loan types in tenant.
-    - Accessible to: Tenant Admin, Tenant User
-    - Not accessible to: Super Admin
-    - Shows only active types by default
-    - Set include_inactive=true to see all
-    """
     
     return await LoanTypeService.list_loan_types(
         db, current_user.tenant_id, paginator, include_inactive
@@ -72,11 +60,6 @@ async def get_loan_type(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)]
 ):
-    """
-    Get loan type details with interest rate.
-    - Accessible to: Tenant Admin, Tenant User
-    - Not accessible to: Super Admin
-    """
     
     loan_type = await LoanTypeService.get_loan_type_with_rate(
         db, loan_type_id, current_user.tenant_id
@@ -98,11 +81,6 @@ async def update_loan_type(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Update loan type (ADMIN only).
-    - Can update name and is_active status
-    - Name must remain unique within tenant
-    """
     
     try:
         loan_type = await LoanTypeService.update_loan_type(
@@ -135,13 +113,6 @@ async def delete_loan_type(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Delete loan type (ADMIN only) - HARD DELETE.
-    - Checks if any loans use this loan type
-    - Checks if any interest rules use this loan type
-    - Fails if either exist (set to inactive instead)
-    - Succeeds only if no references exist
-    """
     
     try:
         await LoanTypeService.delete_loan_type(

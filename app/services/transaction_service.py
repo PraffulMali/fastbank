@@ -32,25 +32,6 @@ class TransactionService:
         transfer_request: TransferRequest,
         current_user: User
     ) -> Tuple[Transaction, Transaction, uuid.UUID]:
-        """
-        Initiate a transfer between two accounts.
-        Creates both DEBIT and CREDIT transactions atomically with PENDING status.
-        Triggers background task for processing.
-        
-        Steps:
-        1. Validate source account belongs to user
-        2. Validate source account has sufficient balance
-        3. Validate destination account exists and is active
-        4. Create both transactions with PENDING status (atomic)
-        5. Trigger background task to process transfer
-        6. Return both transactions and reference_id
-        
-        Background task will:
-        - Update balances atomically
-        - Update statuses to SUCCESS/FAILED
-        - Send WebSocket notifications
-        - Create persistent notifications
-        """
         # 1. Get source account
         source_query = select(Account).where(
             and_(
@@ -145,16 +126,6 @@ class TransactionService:
         deposit_request: DepositRequest,
         current_user: User
     ) -> Transaction:
-        """
-        Deposit cash into an account.
-        
-        Steps:
-        1. Get account by ID
-        2. Verify account belongs to current user
-        3. Create CREDIT transaction with ReferenceType.CASH and SUCCESS status
-        4. Update account balance
-        5. Return transaction
-        """
         # 1. Get account
         account_query = select(Account).where(
             and_(
@@ -220,7 +191,6 @@ class TransactionService:
         db: AsyncSession,
         transaction_id: uuid.UUID
     ) -> Optional[Transaction]:
-        """Get transaction by ID with related account and user data"""
         return await db.get(Transaction, transaction_id)
     
     
@@ -229,10 +199,6 @@ class TransactionService:
         db: AsyncSession,
         transaction_id: uuid.UUID
     ) -> Optional[TransactionDetailResponse]:
-        """
-        Get transaction details with counterparty information.
-        For TRANSFER type transactions, finds the linked transaction and extracts counterparty info.
-        """
         # Get the transaction
         transaction = await db.get(Transaction, transaction_id)
         if not transaction:
@@ -293,10 +259,6 @@ class TransactionService:
     
     @staticmethod
     def get_user_transactions_query(user: User):
-        """
-        Get base query for user's transactions.
-        Returns transactions from all accounts owned by the user (active accounts only).
-        """
         # Get all active account IDs for this user
         account_ids_subquery = (
             select(Account.id)
@@ -316,10 +278,6 @@ class TransactionService:
     
     @staticmethod
     def get_tenant_transactions_query(tenant_id: uuid.UUID):
-        """
-        Get base query for all transactions in a tenant.
-        Used by ADMIN to see all transactions (including from inactive accounts).
-        """
         return select(Transaction).where(
             Transaction.tenant_id == tenant_id
         ).order_by(Transaction.created_at.desc())
@@ -331,11 +289,6 @@ class TransactionService:
         current_user: User,
         paginator: Paginator
     ) -> Page:
-        """
-        List transactions based on user role:
-        - USER: See only their account transactions (active accounts)
-        - ADMIN: See all transactions in their tenant (including inactive accounts)
-        """
         if current_user.role == UserRole.USER:
             query = TransactionService.get_user_transactions_query(current_user)
         elif current_user.role == UserRole.ADMIN:
@@ -382,11 +335,6 @@ class TransactionService:
         transaction_id: uuid.UUID,
         current_user: User
     ) -> Transaction:
-        """
-        Verify user has permission to view this transaction.
-        - USER: Can view only their account's transactions
-        - ADMIN: Can view any transaction in their tenant
-        """
         transaction = await db.get(Transaction, transaction_id)
         if not transaction:
             raise ValueError("Transaction not found")

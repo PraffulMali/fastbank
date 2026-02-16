@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class LoanTypeCreate(BaseModel):
-    """Schema for creating loan type (ADMIN only)"""
     name: str = Field(..., min_length=2, max_length=100, description="Loan type name")
     
     @field_validator("name")
@@ -17,7 +16,6 @@ class LoanTypeCreate(BaseModel):
 
 
 class LoanTypeUpdate(BaseModel):
-    """Schema for updating loan type"""
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     is_active: Optional[bool] = None
     
@@ -32,7 +30,6 @@ class LoanTypeUpdate(BaseModel):
 
 
 class LoanTypeResponse(BaseModel):
-    """Schema for loan type response"""
     id: uuid.UUID
     tenant_id: uuid.UUID
     name: str
@@ -45,7 +42,6 @@ class LoanTypeResponse(BaseModel):
 
 
 class LoanTypeWithRateResponse(BaseModel):
-    """Schema for loan type with its interest rate"""
     id: uuid.UUID
     tenant_id: uuid.UUID
     name: str

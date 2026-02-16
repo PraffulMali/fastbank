@@ -18,10 +18,6 @@ async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     db: Annotated[AsyncSession, Depends(get_db)]
 ) -> User:
-    """
-    Dependency to get current authenticated user from JWT token
-    Also checks if user is blacklisted (logged out)
-    """
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -88,9 +84,6 @@ async def get_current_user(
 async def require_super_admin(
     current_user: Annotated[User, Depends(get_current_user)]
 ) -> User:
-    """
-    Dependency to require SUPER_ADMIN role
-    """
     if current_user.role != UserRole.SUPER_ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -102,9 +95,6 @@ async def require_super_admin(
 async def require_admin(
     current_user: Annotated[User, Depends(get_current_user)]
 ) -> User:
-    """
-    Dependency to require at least ADMIN role (SUPER_ADMIN or ADMIN)
-    """
     if current_user.role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -116,10 +106,6 @@ async def require_admin(
 async def require_tenant_admin(
     current_user: Annotated[User, Depends(get_current_user)]
 ) -> User:
-    """
-    Dependency to require ADMIN role (NOT SUPER_ADMIN).
-    Used for account operations where SUPER_ADMIN should be blocked.
-    """
     if current_user.role == UserRole.SUPER_ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -144,10 +130,6 @@ async def require_tenant_admin(
 async def require_tenant_member(
     current_user: Annotated[User, Depends(get_current_user)]
 ) -> User:
-    """
-    Dependency to require being a member of a tenant (ADMIN or USER).
-    Explicitly blocks SUPER_ADMIN.
-    """
     if current_user.role == UserRole.SUPER_ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -166,10 +148,6 @@ async def require_tenant_member(
 async def require_user(
     current_user: Annotated[User, Depends(get_current_user)]
 ) -> User:
-    """
-    Dependency to require USER role.
-    Explicitly blocks SUPER_ADMIN, ADMIN, and STAFF.
-    """
     if current_user.role != UserRole.USER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

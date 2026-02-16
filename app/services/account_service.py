@@ -23,10 +23,6 @@ class AccountService:
     
     @staticmethod
     def generate_account_number() -> str:
-        """
-        Generate a unique account number in format: ACC + 12 digits
-        Example: ACC123456789012
-        """
         digits = ''.join(random.choices(string.digits, k=12))
         return f"ACC{digits}"
     
@@ -37,12 +33,6 @@ class AccountService:
         user_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> Account:
-        """
-        Create a new account for a user.
-        - Generates unique account number
-        - Validates user doesn't already have account of this type
-        - Validates user exists in the same tenant
-        """        
         # Validate user exists and belongs to the same tenant
         user = await db.get(User, user_id)
         if not user:
@@ -115,7 +105,6 @@ class AccountService:
         db: AsyncSession,
         account_id: uuid.UUID
     ) -> Optional[Account]:
-        """Get account by ID"""
         return await db.get(Account, account_id)
     
     
@@ -126,7 +115,6 @@ class AccountService:
         tenant_id: uuid.UUID,
         include_inactive: bool = False
     ) -> List[Account]:
-        """List all accounts for a specific user in a tenant"""
         query = select(Account).where(
             and_(
                 Account.user_id == user_id,
@@ -143,7 +131,6 @@ class AccountService:
 
     @staticmethod
     def get_accounts_query(tenant_id: uuid.UUID):
-        """Get base query for listing accounts in a tenant"""
         return select(Account).where(Account.tenant_id == tenant_id)
 
     @staticmethod
@@ -152,7 +139,6 @@ class AccountService:
         tenant_id: uuid.UUID,
         paginator: Paginator
     ) -> Page:
-        """List accounts with pagination, centralizing query construction in service layer"""
         query = AccountService.get_accounts_query(tenant_id)
         return await paginator.paginate(db, query)
 
@@ -161,7 +147,6 @@ class AccountService:
         db: AsyncSession,
         current_user: User
     ):
-        """Get accounts for the current regular user"""
         accounts = await AccountService.list_user_accounts(
             db,
             current_user.id,
@@ -177,7 +162,6 @@ class AccountService:
         account_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> Account:
-        """Retrieve account and validate tenant ownership"""
         account = await AccountService.get_account_by_id(db, account_id)
         if not account:
             raise ValueError("Account not found")
@@ -194,7 +178,6 @@ class AccountService:
         account_update: AccountUpdate,
         tenant_id: uuid.UUID
     ) -> Account:
-        """Update account and validate tenant ownership"""
         account = await AccountService.get_account_by_id(db, account_id)
         if not account:
             raise ValueError("Account not found")
@@ -210,7 +193,6 @@ class AccountService:
         account_id: uuid.UUID,
         tenant_id: uuid.UUID
     ):
-        """Soft delete account and validate tenant ownership"""
         account = await AccountService.get_account_by_id(db, account_id)
         if not account:
             raise ValueError("Account not found")
@@ -226,9 +208,6 @@ class AccountService:
         account_id: uuid.UUID,
         account_update: AccountUpdate
     ) -> Optional[Account]:
-        """
-        Update account - only supports reactivating (is_active = True)
-        """
         account = await db.get(Account, account_id)
         if not account:
             return None
@@ -247,7 +226,6 @@ class AccountService:
         db: AsyncSession,
         account_id: uuid.UUID
     ) -> Optional[Account]:
-        """Soft delete an account"""
         account = await db.get(Account, account_id)
         if not account:
             return None

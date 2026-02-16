@@ -6,27 +6,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AccountCreateByAdmin(BaseModel):
-    """
-    Schema for ADMIN creating an account for a user.
-    Requires user_id and account_type.
-    """
     user_id: uuid.UUID
 
     account_type_id: uuid.UUID
 
 
 class AccountUpdate(BaseModel):
-    """
-    Schema for updating account - only is_active can be updated (to reactivate).
-    """
     is_active: bool = Field(..., description="Set to True to reactivate account")
 
 
 class AccountResponse(BaseModel):
-    """
-    Schema for account response (ADMIN view).
-    Includes is_active and deleted_at.
-    """
     id: uuid.UUID
     tenant_id: uuid.UUID
     user_id: uuid.UUID
@@ -57,10 +46,6 @@ class AccountResponse(BaseModel):
 
 
 class AccountUserSingleResponse(BaseModel):
-    """
-    Schema for single account in user view.
-    Does NOT include is_active and deleted_at.
-    """
     id: uuid.UUID
     account_number: str
     account_type_id: uuid.UUID
@@ -87,10 +72,6 @@ class AccountUserSingleResponse(BaseModel):
 
 
 class AccountUserResponse(BaseModel):
-    """
-    Schema for /accounts/me endpoint (USER view).
-    Returns list of accounts without is_active and deleted_at.
-    """
     accounts: List[AccountUserSingleResponse]
     
     model_config = ConfigDict(from_attributes=True)

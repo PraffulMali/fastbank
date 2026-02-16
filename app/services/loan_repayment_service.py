@@ -302,10 +302,6 @@
         
 #         return stats
 
-"""
-Loan Repayment Service
-Handles EMI deductions, repayment tracking, and related operations.
-"""
 from typing import Optional, Tuple
 import uuid
 from datetime import datetime, timezone
@@ -342,22 +338,6 @@ class LoanRepaymentService:
         annual_interest_rate: Decimal,
         tenure_months: int
     ) -> Tuple[int, int]:
-        """
-        Calculate how much of the EMI goes to interest vs principal.
-        
-        Formula:
-        - Interest component = (remaining_principal * annual_rate / 12 / 100)
-        - Principal component = EMI - Interest component
-        
-        Args:
-            emi_amount: Total EMI amount in paisa
-            remaining_principal: Remaining principal in paisa
-            annual_interest_rate: Annual interest rate (e.g., 12.00 for 12%)
-            tenure_months: Total tenure in months (not used in calculation but kept for context)
-            
-        Returns:
-            Tuple of (principal_component, interest_component) in paisa
-        """
         # Calculate monthly interest
         monthly_rate = annual_interest_rate / Decimal("12") / Decimal("100")
         interest_component = int(Decimal(remaining_principal) * monthly_rate)
@@ -377,33 +357,6 @@ class LoanRepaymentService:
         db: AsyncSession,
         loan: Loan
     ) -> Tuple[bool, str]:
-        """
-        Process EMI deduction for a single loan.
-        
-        IMPORTANT: This method does NOT manage transactions. The caller must ensure
-        this method is called within a transaction context (e.g., within db.begin() 
-        or db.begin_nested()).
-        
-        For batch processing, use process_monthly_emis() which handles transactions properly.
-        
-        Steps:
-        1. Check if account has sufficient balance
-        2. If yes:
-           - Create DEBIT transaction
-           - Reduce account balance
-           - Split EMI into principal and interest
-           - Update loan's remaining_principal
-           - Create loan repayment record
-        3. If no:
-           - Return failure (caller handles notifications)
-        
-        Args:
-            db: Database session (caller must manage transaction)
-            loan: Loan object to process
-            
-        Returns:
-            Tuple of (success: bool, message: str)
-        """
         # Get account
         account = await db.get(Account, loan.account_id)
         if not account:
@@ -486,16 +439,6 @@ class LoanRepaymentService:
     
     @staticmethod
     async def process_monthly_emis(db: AsyncSession) -> dict:
-        """
-        Process EMI deductions for all active approved loans.
-        This is called by the Celery task on the 1st of every month.
-        
-        Each loan is processed in its own savepoint transaction to ensure
-        atomicity per loan while allowing other loans to succeed if one fails.
-        
-        Returns:
-            Dictionary with statistics about the processing
-        """
         # Get all active approved loans
         query = select(Loan).where(
             and_(

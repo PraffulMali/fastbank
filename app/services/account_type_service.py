@@ -19,10 +19,6 @@ class AccountTypeService:
         account_type_in: AccountTypeCreate,
         tenant_id: uuid.UUID
     ) -> AccountType:
-        """
-        Create a new account type for a tenant.
-        Validates that name is unique within the tenant.
-        """
         # Check for duplicate name within tenant
         existing_query = select(AccountType).where(
             and_(
@@ -53,7 +49,6 @@ class AccountTypeService:
         db: AsyncSession,
         account_type_id: uuid.UUID
     ) -> Optional[AccountType]:
-        """Get account type by ID"""
         return await db.get(AccountType, account_type_id)
     
     @staticmethod
@@ -63,10 +58,6 @@ class AccountTypeService:
         paginator: Paginator,
         include_inactive: bool = False
     ) -> Page:
-        """
-        List all account types for a tenant.
-        By default, only active types are shown.
-        """
         query = select(AccountType).where(AccountType.tenant_id == tenant_id)
         
         if not include_inactive:
@@ -83,10 +74,6 @@ class AccountTypeService:
         account_type_update: AccountTypeUpdate,
         tenant_id: uuid.UUID
     ) -> Optional[AccountType]:
-        """
-        Update account type.
-        Validates tenant ownership.
-        """
         account_type = await db.get(AccountType, account_type_id)
         if not account_type:
             return None
@@ -130,13 +117,6 @@ class AccountTypeService:
         account_type_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> None:
-        """
-        Hard delete an account type with protection.
-        Checks if:
-        1. Any accounts reference this account type
-        2. Any interest rules reference this account type
-        Raises ValueError if either exist.
-        """
         account_type = await db.get(AccountType, account_type_id)
         if not account_type:
             raise ValueError("Account type not found")
@@ -180,10 +160,6 @@ class AccountTypeService:
         account_type_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> Optional[dict]:
-        """
-        Get account type with its interest rules.
-        Returns dict with account type info and rules.
-        """
         account_type = await db.get(AccountType, account_type_id)
         if not account_type or account_type.tenant_id != tenant_id:
             return None

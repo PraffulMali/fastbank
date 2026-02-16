@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict
 
 
 class NotificationResponse(BaseModel):
-    """Schema for notification response"""
     id: uuid.UUID
     tenant_id: uuid.UUID
     user_id: uuid.UUID
@@ -21,7 +20,6 @@ class NotificationResponse(BaseModel):
 
 
 class NotificationListResponse(BaseModel):
-    """Schema for list of notifications"""
     notifications: list[NotificationResponse]
     total: int
     unread_count: int
@@ -30,10 +28,8 @@ class NotificationListResponse(BaseModel):
 
 
 class UnreadCountResponse(BaseModel):
-    """Schema for unread notification count"""
     unread_count: int
 
 
 class MarkAsReadRequest(BaseModel):
-    """Schema for marking notifications as read"""
     notification_ids: list[uuid.UUID]

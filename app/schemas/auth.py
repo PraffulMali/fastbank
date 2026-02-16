@@ -36,7 +36,6 @@ class ResetPasswordRequest(BaseModel):
     
     @field_validator("new_password")
     def validate_new_password(cls, v: str) -> str:
-        """Validate password strength"""
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters long")
         
@@ -56,7 +55,6 @@ class ResetPasswordRequest(BaseModel):
     
     @field_validator("confirm_password")
     def passwords_match(cls, v: str, info) -> str:
-        """Validate that passwords match"""
         if 'new_password' in info.data and v != info.data['new_password']:
             raise ValueError("Passwords do not match")
         return v
