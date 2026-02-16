@@ -34,9 +34,6 @@ async def create_transfer(
             db, transfer_request, current_user
         )
         
-        # We return the data as a dictionary, and FastAPI will use TransferResponse 
-        # to validate and serialize it. Since TransactionResponse has from_attributes=True,
-        # it will correctly handle the ORM objects.
         return TransferResponse(
             reference_id=reference_id,
             debit_transaction=debit_txn,
@@ -111,10 +108,8 @@ async def get_transaction(
 
     
     try:
-        # Verify access permissions
         await TransactionService.verify_transaction_access(db, transaction_id, current_user)
         
-        # Get transaction with counterparty info
         transaction_detail = await TransactionService.get_transaction_detail_with_counterparty(
             db, transaction_id
         )

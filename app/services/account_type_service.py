@@ -19,7 +19,6 @@ class AccountTypeService:
         account_type_in: AccountTypeCreate,
         tenant_id: uuid.UUID
     ) -> AccountType:
-        # Check for duplicate name within tenant
         existing_query = select(AccountType).where(
             and_(
                 AccountType.tenant_id == tenant_id,
@@ -31,7 +30,6 @@ class AccountTypeService:
         if result.scalar_one_or_none():
             raise ValueError(f"Account type '{account_type_in.name}' already exists in this tenant")
         
-        # Create account type
         new_account_type = AccountType(
             tenant_id=tenant_id,
             name=account_type_in.name,
@@ -78,13 +76,10 @@ class AccountTypeService:
         if not account_type:
             return None
         
-        # Verify ownership
         if account_type.tenant_id != tenant_id:
             raise PermissionError("Cannot update account type from different tenant")
         
-        # Update name if provided
         if account_type_update.name is not None:
-            # Check for duplicate name
             duplicate_query = select(AccountType).where(
                 and_(
                     AccountType.tenant_id == tenant_id,
@@ -99,7 +94,6 @@ class AccountTypeService:
             
             account_type.name = account_type_update.name
         
-        # Update is_active if provided
         if account_type_update.is_active is not None:
             account_type.is_active = account_type_update.is_active
             if account_type_update.is_active:
@@ -121,11 +115,9 @@ class AccountTypeService:
         if not account_type:
             raise ValueError("Account type not found")
         
-        # Verify ownership
         if account_type.tenant_id != tenant_id:
             raise PermissionError("Cannot delete account type from different tenant")
         
-        # Check if any accounts use this account type
         accounts_query = select(func.count()).select_from(Account).where(
             Account.account_type_id == account_type_id
         )
@@ -137,7 +129,6 @@ class AccountTypeService:
                 f"Cannot delete account type: {accounts_count} accounts are using it. "
             )
         
-        # Check if any interest rules use this account type
         rules_query = select(func.count()).select_from(InterestRule).where(
             InterestRule.account_type_id == account_type_id
         )
@@ -150,7 +141,6 @@ class AccountTypeService:
                 "Delete the interest rules first or set account type to inactive."
             )
         
-        # Safe to delete
         await db.delete(account_type)
         await db.commit()
     
@@ -164,7 +154,6 @@ class AccountTypeService:
         if not account_type or account_type.tenant_id != tenant_id:
             return None
         
-        # Get interest rules for this account type
         rules_query = select(InterestRule).where(
             and_(
                 InterestRule.account_type_id == account_type_id,

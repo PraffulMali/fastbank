@@ -49,7 +49,7 @@ class UserCreateByAdmin(UserBase):
     
     @field_validator("phone_number")
     def validate_phone(cls, v: str) -> str:
-        v = re.sub(r'\D', '', v)  # Remove non-digits
+        v = re.sub(r'\D', '', v) 
         if len(v) < 10:
             raise ValueError("Phone number must be at least 10 digits")
         return v

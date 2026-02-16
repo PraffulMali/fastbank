@@ -13,7 +13,7 @@ from app.schemas.account import (
     AccountUserResponse
 )
 from app.services.account_service import AccountService
-from app.dependencies import get_current_user, require_tenant_admin, require_user  # Import from dependencies
+from app.dependencies import get_current_user, require_tenant_admin, require_user
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(

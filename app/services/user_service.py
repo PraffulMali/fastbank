@@ -75,11 +75,9 @@ class UserService:
         if not user:
             raise ValueError("User not found")
         
-        # Verify old password
         if not verify_password(old_password, user.password):
             raise ValueError("Invalid old password")
         
-        # Update password
         user.password = get_password_hash(new_password)
         await db.commit()
         
@@ -93,10 +91,8 @@ class UserService:
         access_token_exp: Optional[int] = None
     ) -> TokenRefreshResponse:
         try:
-            # Decode refresh token
             payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
             
-            # Validate token type
             if payload.get("token_type") != "refresh":
                 raise ValueError("Invalid token type")
             
@@ -106,20 +102,17 @@ class UserService:
             if not refresh_jti or not refresh_exp:
                 raise ValueError("Invalid token payload")
             
-            # Check if refresh token is blacklisted
             redis = await get_redis()
             is_blacklisted = await redis.get(f"blacklist:token:{refresh_jti}")
             if is_blacklisted:
                 raise ValueError("Token has been invalidated. Please login again.")
             
-            # Get user ID from token
             user_id_str = payload.get("sub")
             if not user_id_str:
                 raise ValueError("Invalid token payload")
             
             user_id = uuid.UUID(user_id_str)
             
-            # Verify user still exists and is active
             user = await db.get(User, user_id)
             if not user:
                 raise ValueError("User not found")
@@ -130,7 +123,6 @@ class UserService:
             if not user.is_email_verified:
                 raise ValueError("Email not verified. Please verify your email to login.")
             
-            # Create new token pair
             token_data = {
                 "sub": str(user.id),
                 "role": user.role.value,
@@ -144,14 +136,11 @@ class UserService:
                 access_exp=new_access_exp
             )
             
-            # Blacklist the old refresh token
             await UserService.logout_user(refresh_jti, refresh_exp)
             
-            # Blacklist the old access token if provided in header
             if access_token_jti and access_token_exp:
                 await UserService.logout_user(access_token_jti, access_token_exp)
             elif payload.get("access_jti") and payload.get("access_exp"):
-                # Blacklist the access token linked to this refresh token (from payload)
                 await UserService.logout_user(payload.get("access_jti"), payload.get("access_exp"))
             
             return TokenRefreshResponse(
@@ -167,23 +156,19 @@ class UserService:
         db: AsyncSession,
         user_in: UserCreateBySuperAdmin
     ) -> tuple[User, str, str]:
-        # Validate tenant exists and is active
         tenant = await db.get(Tenant, user_in.tenant_id)
         if not tenant:
             raise ValueError("Tenant not found")
         if not tenant.is_active:
             raise ValueError("Cannot create user for inactive/deleted tenant")
         
-        # Check if email already exists
         query = select(User).where(User.email == user_in.email)
         result = await db.execute(query)
         if result.scalar_one_or_none():
             raise ValueError("Email already exists")
         
-        # Generate verification token
         verification_token = secrets.token_urlsafe(32)
         
-        # Create temporary password (will be set via email verification)
         temp_password = secrets.token_urlsafe(16)
         
         new_user = User(
@@ -208,13 +193,11 @@ class UserService:
         admin_tenant_id: uuid.UUID,
         admin_user_id: uuid.UUID
     ) -> tuple[User, str, str]:
-        # Check if email already exists
         query = select(User).where(User.email == user_in.email)
         result = await db.execute(query)
         if result.scalar_one_or_none():
             raise ValueError("Email already exists")
         
-        # Check for duplicate phone number in tenant
         phone_query = select(UserIdentity).where(
             and_(
                 UserIdentity.phone_number == user_in.phone_number,
@@ -225,7 +208,6 @@ class UserService:
         if phone_result.scalar_one_or_none():
             raise ValueError("Phone number already exists in this tenant")
         
-        # Check for duplicate PAN in tenant
         pan_query = select(UserIdentity).where(
             and_(
                 UserIdentity.pan_number == user_in.pan_number,
@@ -236,10 +218,8 @@ class UserService:
         if pan_result.scalar_one_or_none():
             raise ValueError("PAN number already exists in this tenant")
         
-        # Generate verification token
         verification_token = secrets.token_urlsafe(32)
         
-        # Create temporary password
         temp_password = secrets.token_urlsafe(16)
         
         new_user = User(
@@ -254,7 +234,6 @@ class UserService:
         db.add(new_user)
         await db.flush()
         
-        # Create UserIdentity with verification info
         user_identity = UserIdentity(
             tenant_id=admin_tenant_id,
             user_id=new_user.id,
@@ -273,7 +252,6 @@ class UserService:
         
         db.add(user_identity)
         
-        # Validate account type exists for this tenant
         account_type_obj = await db.get(AccountType, user_in.account_type_id)
         
         if not account_type_obj:
@@ -282,7 +260,6 @@ class UserService:
         if account_type_obj.tenant_id != admin_tenant_id:
             raise ValueError("Account type does not belong to this tenant")
 
-        # Create bank account for the user
         account_in = AccountCreateByAdmin(
             user_id=new_user.id,
             account_type_id=user_in.account_type_id
@@ -321,7 +298,7 @@ class UserService:
     def get_users_query(current_user: User):
         if current_user.role == UserRole.SUPER_ADMIN:
             return select(User).where(User.role == UserRole.ADMIN)
-        else:  # ADMIN
+        else:
             return select(User).where(User.tenant_id == current_user.tenant_id)
 
     @staticmethod
@@ -365,7 +342,7 @@ class UserService:
                 raise PermissionError("Cannot view users from other tenants")
             return UserDetailResponse.model_validate(user)
         
-        else:  # USER
+        else:
             if user.id != current_user.id:
                 raise PermissionError("You can only view your own profile")
             return UserSelfResponse.model_validate(user)
@@ -408,7 +385,7 @@ class UserService:
         if current_user.role == UserRole.SUPER_ADMIN:
             if user.role != UserRole.ADMIN:
                 raise PermissionError("SUPER_ADMIN can only update ADMIN users")
-        else: # ADMIN
+        else:
             if user.tenant_id != current_user.tenant_id:
                 raise PermissionError("Cannot update users from other tenants")
         
@@ -427,7 +404,7 @@ class UserService:
         if current_user.role == UserRole.SUPER_ADMIN:
             if user.role != UserRole.ADMIN:
                 raise PermissionError("SUPER_ADMIN can only delete ADMIN users")
-        else: # ADMIN
+        else: 
             if user.tenant_id != current_user.tenant_id:
                 raise PermissionError("Cannot delete users from other tenants")
         
@@ -471,7 +448,6 @@ class UserService:
         user.is_email_verified = True
         await db.commit()
         
-        # Delete the token after successful verification
         await redis.delete(f"verify_token:{hashed_token}")
         return True
 
@@ -495,7 +471,6 @@ class UserService:
         
         redis = await get_redis()
         
-        # Calculate remaining time for the token
         current_time = int(time.time())
         ttl = exp - current_time
         
@@ -516,18 +491,14 @@ class UserService:
         user = result.scalar_one_or_none()
         
         if not user:
-            # Don't reveal if user exists or not
             return None
         
         if not user.is_active:
-            # Don't reveal if user is inactive
             return None
         
         if not user.is_email_verified:
-            # Don't reveal if email is not verified
             return None
         
-        # Generate reset token
         reset_token = secrets.token_urlsafe(32)
         
         return user, reset_token
@@ -549,11 +520,9 @@ class UserService:
         if not user:
             return False
         
-        # Update password
         user.password = get_password_hash(new_password)
         await db.commit()
         
-        # Delete the token after successful password reset
         await redis.delete(f"reset_token:{hashed_token}")
         
         return True
@@ -566,18 +535,14 @@ class UserService:
         user = result.scalar_one_or_none()
         
         if not user:
-            # Don't reveal if user exists
             return None
         
         if user.is_email_verified:
-            # Email already verified
             return None
         
         if not user.is_active:
-            # User is inactive
             return None
         
-        # Generate new verification token
         verification_token = secrets.token_urlsafe(32)
         
         return user, verification_token

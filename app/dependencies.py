@@ -17,7 +17,6 @@ security = HTTPBearer(auto_error=False)
 
 async def verify_token_and_get_user(token: str, db: AsyncSession) -> User:
     try:
-        # Decode token
         payload = decode_access_token(token)
         if not payload:
             raise ValueError("Invalid or expired token")
@@ -30,7 +29,6 @@ async def verify_token_and_get_user(token: str, db: AsyncSession) -> User:
         
         user_id = uuid.UUID(user_id_str)
         
-        # Check if token is blacklisted
         redis = await get_redis()
         is_blacklisted = await redis.get(f"blacklist:token:{jti}")
         
@@ -41,7 +39,6 @@ async def verify_token_and_get_user(token: str, db: AsyncSession) -> User:
                 headers={"WWW-Authenticate": "Bearer"},
             )
             
-        # Get user from database
         user = await db.get(User, user_id)
         
         if user is None:

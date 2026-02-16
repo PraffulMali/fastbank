@@ -55,23 +55,17 @@ class AdvanceLoanRepaymentService:
         remaining_principal: int,
         annual_interest_rate: Decimal
     ) -> Tuple[int, int, int]:
-        # Calculate accrued interest
         interest_component = AdvanceLoanRepaymentService.calculate_accrued_interest(
             remaining_principal, annual_interest_rate
         )
         
-        # Allocate to interest first
         if payment_amount <= interest_component:
-            # Payment only covers interest (or less)
             return (payment_amount, 0, remaining_principal)
         
-        # Payment covers interest and some/all principal
         principal_component = payment_amount - interest_component
         
-        # Ensure we don't pay more principal than what's remaining
         if principal_component > remaining_principal:
             principal_component = remaining_principal
-            # Recalculate interest component (in case of overpayment)
             interest_component = payment_amount - principal_component
         
         remaining_after = remaining_principal - principal_component
@@ -107,7 +101,6 @@ class AdvanceLoanRepaymentService:
         
         monthly_rate = float(annual_interest_rate) / 12 / 100
         
-        # Check if EMI > P × r (required for formula to work)
         min_emi = remaining_principal * monthly_rate
         if emi_amount <= min_emi:
             logger.warning(
@@ -116,13 +109,11 @@ class AdvanceLoanRepaymentService:
             )
             return None
         
-        # Calculate new tenure
         try:
             numerator = math.log(1 - (remaining_principal * monthly_rate / emi_amount))
             denominator = math.log(1 + monthly_rate)
             new_tenure = -numerator / denominator
             
-            # Round up to nearest month
             return math.ceil(new_tenure)
         except (ValueError, ZeroDivisionError) as e:
             logger.error(f"Error calculating tenure: {str(e)}")
@@ -138,7 +129,6 @@ class AdvanceLoanRepaymentService:
         background_tasks: BackgroundTasks
     ) -> Tuple[bool, str, Optional[dict]]:
         try:
-            # 1. Fetch and validate loan
             loan = await db.get(Loan, loan_id)
             if not loan:
                 return (False, "Loan not found", None)
@@ -152,13 +142,11 @@ class AdvanceLoanRepaymentService:
             if loan.remaining_principal <= 0:
                 return (False, "Loan already fully repaid", None)
             
-            # 2. Convert payment to paisa
             payment_amount_paisa = int(payment_amount_rupees * 100)
             
             if payment_amount_paisa <= 0:
                 return (False, "Payment amount must be greater than zero", None)
             
-            # 3. Get account and check balance
             account = await db.get(Account, loan.account_id)
             if not account:
                 return (False, "Account not found", None)
@@ -166,7 +154,6 @@ class AdvanceLoanRepaymentService:
             if account.balance < payment_amount_paisa:
                 shortfall = payment_amount_paisa - account.balance
                 
-                # Send failure notification
                 await NotificationService.create_notification(
                     db=db,
                     tenant_id=tenant_id,
@@ -178,7 +165,6 @@ class AdvanceLoanRepaymentService:
                     send_websocket=True
                 )
                 
-                # Send failure email
                 user = await db.get(User, user_id)
                 if user:
                     background_tasks.add_task(
@@ -191,19 +177,16 @@ class AdvanceLoanRepaymentService:
                 
                 return (False, f"Insufficient funds. Required: ₹{payment_amount_rupees:,.2f}, Available: ₹{account.balance / 100:,.2f}", None)
             
-            # 4 & 5. Calculate interest and allocate payment
             interest_component, principal_component, remaining_after = AdvanceLoanRepaymentService.allocate_payment(
                 payment_amount=payment_amount_paisa,
                 remaining_principal=loan.remaining_principal,
                 annual_interest_rate=loan.interest_rate
             )
             
-            # 6. Determine if foreclosure
             is_foreclosure = (remaining_after == 0)
             new_status = LoanStatus.FORECLOSED if is_foreclosure else LoanStatus.APPROVED
             new_tenure = 0 if is_foreclosure else loan.tenure_months
             
-            # 7. Recalculate tenure if not foreclosure
             if not is_foreclosure:
                 calculated_tenure = AdvanceLoanRepaymentService.recalculate_tenure(
                     remaining_principal=remaining_after,
@@ -214,17 +197,13 @@ class AdvanceLoanRepaymentService:
                 if calculated_tenure is not None:
                     new_tenure = calculated_tenure
                 else:
-                    # Cannot recalculate tenure - might need loan restructuring
                     logger.warning(f"Cannot recalculate tenure for loan {loan_id}. Keeping original tenure.")
                     new_tenure = loan.tenure_months
             
-            # Store values for notifications
             transaction_id = None
             old_remaining = loan.remaining_principal
             
-            # 8. ATOMIC TRANSACTION BLOCK
             async with db.begin_nested():
-                # Create DEBIT transaction
                 repayment_transaction = Transaction(
                     tenant_id=tenant_id,
                     account_id=loan.account_id,
@@ -237,19 +216,15 @@ class AdvanceLoanRepaymentService:
                 
                 db.add(repayment_transaction)
                 
-                # Update account balance
                 account.balance -= payment_amount_paisa
                 
-                # Update loan
                 loan.remaining_principal = remaining_after
                 loan.tenure_months = new_tenure
                 loan.status = new_status
                 
-                # Flush to get transaction ID
                 await db.flush()
                 transaction_id = repayment_transaction.id
                 
-                # Create repayment record
                 repayment = LoanRepayment(
                     tenant_id=tenant_id,
                     loan_id=loan_id,
@@ -264,14 +239,11 @@ class AdvanceLoanRepaymentService:
                 db.add(repayment)
                 await db.flush()
             
-            # Commit outer transaction
             await db.commit()
             
-            # Refresh objects
             await db.refresh(loan)
             await db.refresh(account)
             
-            # 9. Send success notification
             if is_foreclosure:
                 message = f"Congratulations! Your loan has been fully repaid. Payment of ₹{payment_amount_rupees:,.2f} (Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}) has been processed. Your loan is now FORECLOSED."
             else:
@@ -288,7 +260,6 @@ class AdvanceLoanRepaymentService:
                 send_websocket=True
             )
             
-            # Prepare details for response
             details = {
                 "payment_amount": payment_amount_rupees,
                 "interest_component": interest_component / 100,

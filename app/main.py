@@ -11,7 +11,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware for WebSocket and REST API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
@@ -20,7 +19,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include REST API routers
 app.include_router(auth.router)
 app.include_router(tenant.router)
 app.include_router(user.router)
@@ -32,7 +30,6 @@ app.include_router(account_type.router)
 app.include_router(loan_type.router)
 app.include_router(interest_rule.router)
 
-# Include WebSocket router
 app.include_router(ws_router.router)
 
 @app.get("/")

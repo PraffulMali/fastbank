@@ -32,7 +32,6 @@ class TransactionService:
         transfer_request: TransferRequest,
         current_user: User
     ) -> Tuple[Transaction, Transaction, uuid.UUID]:
-        # 1. Get source account
         source_query = select(Account).where(
             and_(
                 Account.account_number == transfer_request.source_account_number,
@@ -45,21 +44,16 @@ class TransactionService:
         if not source_account:
             raise ValueError("Source account not found or inactive")
         
-        # Verify source account belongs to current user
         if source_account.user_id != current_user.id:
             raise PermissionError("You can only transfer from your own accounts")
         
-        # Convert amount to smallest unit (Paise)
         amount_in_paise = int(transfer_request.amount * 100)
         
-        # 2. Check sufficient balance
         if source_account.balance < amount_in_paise:
-            # Display balance in Rupees for error message
             balance_in_rupees = source_account.balance / 100
             raise ValueError(f"Insufficient balance. Available: ₹{balance_in_rupees}")
 
         
-        # 3. Get destination account
         dest_query = select(Account).where(
             and_(
                 Account.account_number == transfer_request.destination_account_number,
@@ -72,14 +66,11 @@ class TransactionService:
         if not dest_account:
             raise ValueError("Destination account not found or inactive")
         
-        # Cannot transfer to same account
         if source_account.id == dest_account.id:
             raise ValueError("Cannot transfer to the same account")
         
-        # 4. Generate reference_id for this transfer
         reference_id = uuid.uuid4()
         
-        # 5. Create DEBIT transaction (source)
         debit_transaction = Transaction(
             tenant_id=source_account.tenant_id,
             account_id=source_account.id,
@@ -91,7 +82,6 @@ class TransactionService:
             status=TransactionStatus.PENDING
         )
         
-        # 6. Create CREDIT transaction (destination)
         credit_transaction = Transaction(
             tenant_id=dest_account.tenant_id,
             account_id=dest_account.id,
@@ -103,7 +93,6 @@ class TransactionService:
             status=TransactionStatus.PENDING
         )
         
-        # Add both transactions atomically
         db.add(debit_transaction)
         db.add(credit_transaction)
         
@@ -111,8 +100,6 @@ class TransactionService:
         await db.refresh(debit_transaction)
         await db.refresh(credit_transaction)
         
-        # 7. Trigger background task to process transfer
-        # Using asyncio.create_task to run it in background
         asyncio.create_task(
             TransactionBackgroundTasks.process_transfer(reference_id)
         )
@@ -126,7 +113,6 @@ class TransactionService:
         deposit_request: DepositRequest,
         current_user: User
     ) -> Transaction:
-        # 1. Get account
         account_query = select(Account).where(
             and_(
                 Account.id == deposit_request.account_id,
@@ -139,15 +125,11 @@ class TransactionService:
         if not account:
             raise ValueError("Account not found or inactive")
         
-        # 2. Verify account belongs to current user
         if account.user_id != current_user.id:
             raise PermissionError("You can only deposit into your own accounts")
         
-        # Convert amount to smallest unit (Paise)
         amount_in_paise = int(deposit_request.amount * 100)
         
-        # 3. Create CREDIT transaction
-        # For cash deposit, reference_id can be same as transaction ID or a new one
         reference_id = uuid.uuid4()
         
         transaction = Transaction(
@@ -158,17 +140,15 @@ class TransactionService:
             transaction_type=TransactionType.CREDIT,
             reference_type=ReferenceType.CASH,
             amount=amount_in_paise,
-            status=TransactionStatus.SUCCESS # Cash deposit is usually instant
+            status=TransactionStatus.SUCCESS
         )
         
-        # 4. Update account balance
         account.balance += amount_in_paise
         
         db.add(transaction)
         await db.commit()
         await db.refresh(transaction)
         
-        # 5. Send notification
         try:
             await NotificationService.create_notification(
                 db=db,
@@ -180,7 +160,6 @@ class TransactionService:
                 reference_type="transaction"
             )
         except Exception as e:
-            # Don't fail the transaction if notification fails
             logger.error(f"Failed to send notification for deposit: {e}")
             
         return transaction
@@ -199,21 +178,18 @@ class TransactionService:
         db: AsyncSession,
         transaction_id: uuid.UUID
     ) -> Optional[TransactionDetailResponse]:
-        # Get the transaction
         transaction = await db.get(Transaction, transaction_id)
         if not transaction:
             return None
         
-        # Get account and account_number
         account = await db.get(Account, transaction.account_id)
         if not account:
             return None
         
         counterparty = None
         
-        # If it's a TRANSFER, find the counterparty
+       
         if transaction.reference_type == ReferenceType.TRANSFER:
-            # Find the opposite transaction (same reference_id, opposite type)
             opposite_type = (
                 TransactionType.CREDIT if transaction.transaction_type == TransactionType.DEBIT
                 else TransactionType.DEBIT
@@ -229,10 +205,8 @@ class TransactionService:
             counterparty_txn = counterparty_result.scalar_one_or_none()
             
             if counterparty_txn:
-                # Get counterparty account
                 counterparty_account = await db.get(Account, counterparty_txn.account_id)
                 if counterparty_account:
-                    # Get counterparty user
                     counterparty_user = await db.get(User, counterparty_account.user_id)
                     if counterparty_user:
                         counterparty = CounterpartyInfo(
@@ -259,7 +233,6 @@ class TransactionService:
     
     @staticmethod
     def get_user_transactions_query(user: User):
-        # Get all active account IDs for this user
         account_ids_subquery = (
             select(Account.id)
             .where(
@@ -270,7 +243,6 @@ class TransactionService:
             )
         )
         
-        # Query transactions for these accounts
         return select(Transaction).where(
             Transaction.account_id.in_(account_ids_subquery)
         ).order_by(Transaction.created_at.desc())
@@ -296,15 +268,12 @@ class TransactionService:
         else:
             raise PermissionError("Invalid role for transaction access")
         
-        # Get paginated results
         page_result = await paginator.paginate(db, query)
         
-        # Enrich items with account_number
         enriched_items = []
         for txn in page_result.items:
             account = await db.get(Account, txn.account_id)
             if account:
-                # Create response with account_number
                 enriched_items.append({
                     "id": txn.id,
                     "account_id": txn.account_id,
@@ -317,7 +286,6 @@ class TransactionService:
                     "updated_at": txn.updated_at
                 })
         
-        # Return page with enriched items
         return Page(
             total=page_result.total,
             page=page_result.page,
@@ -340,13 +308,11 @@ class TransactionService:
             raise ValueError("Transaction not found")
         
         if current_user.role == UserRole.USER:
-            # Check if transaction belongs to user's account
             account = await db.get(Account, transaction.account_id)
             if not account or account.user_id != current_user.id:
                 raise PermissionError("You can only view your own transactions")
         
         elif current_user.role == UserRole.ADMIN:
-            # Check if transaction belongs to admin's tenant
             if transaction.tenant_id != current_user.tenant_id:
                 raise PermissionError("You can only view transactions in your tenant")
         

@@ -59,7 +59,6 @@ async def refresh_token(
         
         if credentials:
             try:
-                # We use verify=False because the access token might already be expired
                 payload = jwt.decode(
                     credentials.credentials, 
                     settings.SECRET_KEY, 
@@ -99,10 +98,7 @@ async def logout(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        # Blacklist access token
         await UserService.blacklist_token(credentials.credentials)
-            
-        # Blacklist refresh token
         await UserService.blacklist_token(logout_data.refresh_token)
         
         return {"message": "Logged out successfully"}
@@ -137,7 +133,6 @@ async def forgot_password(
     
     if result:
         user, reset_token = result
-        # Send password reset email asynchronously
         background_tasks.add_task(
             EmailService.send_password_reset_email,
             user.email,
@@ -145,7 +140,6 @@ async def forgot_password(
             str(user.id)
         )
     
-    # Always return success to avoid user enumeration
     return {"message": "If your email is registered and verified, you will receive a password reset link"}
 
 
@@ -179,7 +173,6 @@ async def resend_verification(
     
     if result:
         user, verification_token = result
-        # Send verification email asynchronously
         background_tasks.add_task(
             EmailService.send_verification_resend_email,
             user.email,
@@ -187,5 +180,4 @@ async def resend_verification(
             str(user.id)
         )
     
-    # Always return success to avoid user enumeration
     return {"message": "If your email is registered and unverified, you will receive a new verification link"}

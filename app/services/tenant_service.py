@@ -24,24 +24,20 @@ class TenantService:
             
         new_tenant = Tenant(name=tenant_in.name)
         db.add(new_tenant)
-        await db.flush()  # Flush to get the tenant ID
+        await db.flush()  
         
-        # Create default Account Types
         savings_type = AccountType(tenant_id=new_tenant.id, name="SAVINGS")
         current_type = AccountType(tenant_id=new_tenant.id, name="CURRENT")
         db.add_all([savings_type, current_type])
-        await db.flush() # Flush to get IDs
+        await db.flush() 
         
-        # Create default Loan Types
         personal_loan = LoanType(tenant_id=new_tenant.id, name="PERSONAL")
         vehicle_loan = LoanType(tenant_id=new_tenant.id, name="VEHICLE")
         db.add_all([personal_loan, vehicle_loan])
-        await db.flush() # Flush to get LoanType IDs
+        await db.flush() 
         
-        # Create default Interest Rules
         rules = []
         
-        # 1. SAVINGS account (4%)
         rules.append(InterestRule(
             tenant_id=new_tenant.id,
             rule_type=RuleType.ACCOUNT,
@@ -52,7 +48,6 @@ class TenantService:
             is_active=True
         ))
         
-        # 2. PERSONAL loan (12%)
         rules.append(InterestRule(
             tenant_id=new_tenant.id,
             rule_type=RuleType.LOAN,
@@ -61,7 +56,6 @@ class TenantService:
             is_active=True
         ))
         
-        # 3. VEHICLE loan (10%)
         rules.append(InterestRule(
             tenant_id=new_tenant.id,
             rule_type=RuleType.LOAN,

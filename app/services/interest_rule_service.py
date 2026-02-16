@@ -25,7 +25,6 @@ class InterestRuleService:
         rule_in: InterestRuleCreate,
         tenant_id: uuid.UUID
     ) -> InterestRule:
-        # Verify account_type or loan_type exists and belongs to tenant
         if rule_in.rule_type == "ACCOUNT":
             account_type = await db.get(AccountType, rule_in.account_type_id)
             if not account_type:
@@ -35,13 +34,11 @@ class InterestRuleService:
             if not account_type.is_active:
                 raise ValueError("Cannot create rule for inactive account type")
             
-            # Check for overlapping balance ranges
             overlap_query = select(InterestRule).where(
                 and_(
                     InterestRule.account_type_id == rule_in.account_type_id,
                     InterestRule.is_active == True,
                     or_(
-                        # New rule's min_balance falls within existing range
                         and_(
                             InterestRule.min_balance <= int(rule_in.min_balance * 100),
                             or_(
@@ -49,19 +46,17 @@ class InterestRuleService:
                                 InterestRule.max_balance >= int(rule_in.min_balance * 100)
                             )
                         ),
-                        # New rule's max_balance falls within existing range (if not None)
                         and_(
-                            rule_in.max_balance is not None,  # Python check
+                            rule_in.max_balance is not None,
                             InterestRule.min_balance <= int(rule_in.max_balance * 100),
                             or_(
                                 InterestRule.max_balance.is_(None),
                                 InterestRule.max_balance >= int(rule_in.max_balance * 100)
                             )
                         ),
-                        # New rule completely encompasses existing range
                         and_(
                             InterestRule.min_balance >= int(rule_in.min_balance * 100),
-                            rule_in.max_balance is None  # Python check
+                            rule_in.max_balance is None
                         )
                     )
                 )
@@ -81,7 +76,6 @@ class InterestRuleService:
             if not loan_type.is_active:
                 raise ValueError("Cannot create rule for inactive loan type")
             
-            # Check if loan type already has an interest rule
             existing_query = select(InterestRule).where(
                 and_(
                     InterestRule.loan_type_id == rule_in.loan_type_id,
@@ -94,11 +88,9 @@ class InterestRuleService:
                     "Interest rule already exists for this loan type. Update existing rule instead."
                 )
         
-        # Convert rupees to paise for storage
         min_balance_paise = int(rule_in.min_balance * 100) if rule_in.min_balance is not None else None
         max_balance_paise = int(rule_in.max_balance * 100) if rule_in.max_balance is not None else None
         
-        # Create interest rule
         new_rule = InterestRule(
             tenant_id=tenant_id,
             rule_type=RuleType(rule_in.rule_type),
@@ -146,11 +138,9 @@ class InterestRuleService:
         if not rule:
             return None
         
-        # Verify ownership
         if rule.tenant_id != tenant_id:
             raise PermissionError("Cannot update interest rule from different tenant")
         
-        # Update interest rate
         rule.interest_rate = rule_update.interest_rate
         
         await db.commit()
@@ -167,11 +157,9 @@ class InterestRuleService:
         if not rule:
             raise ValueError("Interest rule not found")
         
-        # Verify ownership
         if rule.tenant_id != tenant_id:
             raise PermissionError("Cannot delete interest rule from different tenant")
         
-        # Delete rule
         await db.delete(rule)
         await db.commit()
     
@@ -197,7 +185,6 @@ class InterestRuleService:
             "total_interest": Decimal(0)
         }
         
-        # 1. Get all active ACCOUNT rules
         rules_query = select(InterestRule).where(
             and_(
                 InterestRule.rule_type == RuleType.ACCOUNT,
@@ -208,7 +195,6 @@ class InterestRuleService:
         rules = result.scalars().all()
         
         for rule in rules:
-            # 2. Find eligible accounts for this rule
             stmt = select(Account).where(
                 and_(
                     Account.tenant_id == rule.tenant_id,
@@ -229,21 +215,14 @@ class InterestRuleService:
             for account in accounts:
                 stats["processed"] += 1
                 try:
-                    # Atomic transaction per account using savepoint
                     async with db.begin_nested():
-                        # Calculate interest (Annual rate -> Monthly)
-                        # interest_rate is percentage (e.g. 5.00 for 5%)
-                        # Formula: balance * (rate/100) / 12
                         
-                        rate = rule.interest_rate  # Decimal
-                        # balance is in paise (int)
-                        # Result should be int (paise)
+                        rate = rule.interest_rate
                         
                         interest_amount_decimal = (Decimal(account.balance) * (rate / Decimal(100))) / Decimal(12)
                         interest_amount_paise = int(interest_amount_decimal)
                         
                         if interest_amount_paise > 0:
-                            # Create system transaction
                             txn_id = uuid.uuid4()
                             acc_txn_ref = uuid.uuid4()
                             transaction = Transaction(
@@ -260,10 +239,8 @@ class InterestRuleService:
                             )
                             db.add(transaction)
                             
-                            # Update account balance
                             account.balance += interest_amount_paise
                             
-                            # Create notification (part of transaction)
                             interest_in_rupees = Decimal(interest_amount_paise) / 100
                             notification = Notification(
                                 tenant_id=account.tenant_id,
@@ -284,8 +261,6 @@ class InterestRuleService:
                             
                 except Exception as e:
                     stats["failed"] += 1
-                    # Log error but continue processing other accounts
-                    # db.begin_nested() automatically rolls back on exception
                     continue
                     
         return stats

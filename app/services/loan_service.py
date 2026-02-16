@@ -14,9 +14,8 @@ from app.models.enums import LoanStatus, UserRole, RuleType
 from app.schemas.loan import LoanCreate, LoanApprovalDecision
 
 
-# LOAN CONFIGURATION CONSTANTS
-MAX_LOAN_AMOUNT = Decimal("10000000.00")  # ₹1 crore
-MIN_LOAN_AMOUNT = Decimal("10000.00")  # ₹10,000
+MAX_LOAN_AMOUNT = Decimal("10000000.00")  
+MIN_LOAN_AMOUNT = Decimal("10000.00")  
 
 
 class LoanService:
@@ -41,18 +40,14 @@ class LoanService:
         if tenure_months == 0:
             return principal_paisa
         
-        # Convert annual interest rate to monthly rate
         monthly_rate = annual_interest_rate / Decimal("12") / Decimal("100")
         
         if monthly_rate == 0:
-            # If interest rate is 0, EMI is simply principal / tenure
             return int(principal_paisa / tenure_months)
         
-        # Calculate (1 + R)^N
         one_plus_r = Decimal("1") + monthly_rate
         one_plus_r_power_n = one_plus_r ** tenure_months
         
-        # EMI formula
         emi = (Decimal(principal_paisa) * monthly_rate * one_plus_r_power_n) / (one_plus_r_power_n - Decimal("1"))
         
         return int(emi)
@@ -64,14 +59,12 @@ class LoanService:
         user_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> Loan:
-        # Validate principal amount limits
         if loan_in.principal_amount < MIN_LOAN_AMOUNT:
             raise ValueError(f"Loan amount must be at least ₹{MIN_LOAN_AMOUNT:,.2f}")
         
         if loan_in.principal_amount > MAX_LOAN_AMOUNT:
             raise ValueError(f"Loan amount cannot exceed ₹{MAX_LOAN_AMOUNT:,.2f}")
         
-        # Validate loan type exists and belongs to tenant
         loan_type = await db.get(LoanType, loan_in.loan_type_id)
         if not loan_type:
             raise ValueError("Loan type not found")
@@ -82,7 +75,6 @@ class LoanService:
         if not loan_type.is_active:
             raise ValueError("Cannot apply for loan with inactive loan type")
         
-        # Fetch interest rate from INTEREST_RULES table
         interest_rule_query = select(InterestRule).where(
             and_(
                 InterestRule.loan_type_id == loan_in.loan_type_id,
@@ -96,10 +88,8 @@ class LoanService:
         if not interest_rule:
             raise ValueError(f"No interest rule configured for loan type '{loan_type.name}'. Please contact admin.")
         
-        # Store interest rate as snapshot (preserves contract integrity)
         interest_rate_snapshot = interest_rule.interest_rate
         
-        # Validate account exists and belongs to user
         account = await db.get(Account, loan_in.account_id)
         if not account:
             raise ValueError("Account not found")
@@ -113,7 +103,6 @@ class LoanService:
         if not account.is_active:
             raise ValueError("Cannot apply for loan on inactive account")
         
-        # Check for existing pending/approved loans on this account
         existing_query = select(Loan).where(
             and_(
                 Loan.account_id == loan_in.account_id,
@@ -128,26 +117,23 @@ class LoanService:
         if existing_loan:
             raise ValueError(f"You already have a {existing_loan.status.value} loan for this account")
         
-        # Convert principal to paisa
         principal_paisa = int(loan_in.principal_amount * 100)
         
-        # Calculate EMI
         emi_paisa = LoanService.calculate_emi(
             principal_paisa=principal_paisa,
             annual_interest_rate=interest_rate_snapshot,
             tenure_months=loan_in.tenure_months
         )
         
-        # Create loan application
         new_loan = Loan(
             tenant_id=tenant_id,
             user_id=user_id,
             account_id=loan_in.account_id,
             loan_type_id=loan_in.loan_type_id,
             principal_amount=principal_paisa,
-            interest_rate=interest_rate_snapshot,  # Snapshot from interest rule
+            interest_rate=interest_rate_snapshot,  
             tenure_months=loan_in.tenure_months,
-            remaining_principal=principal_paisa,  # Initially equal to principal
+            remaining_principal=principal_paisa,  
             emi_amount=emi_paisa,
             loan_purpose=loan_in.loan_purpose,
             status=LoanStatus.APPLIED,
@@ -158,14 +144,11 @@ class LoanService:
         await db.commit()
         await db.refresh(new_loan)
         
-        # Import notification service
         from app.services.notification_service import NotificationService
         from app.models.enums import NotificationType
         
-        # Get the user details for notification message
         user = await db.get(User, user_id)
         
-        # Send notification to USER confirming application
         await NotificationService.create_notification(
             db=db,
             tenant_id=tenant_id,
@@ -177,7 +160,6 @@ class LoanService:
             send_websocket=True
         )
         
-        # Get all admin users in this tenant
         admin_query = select(User).where(
             and_(
                 User.tenant_id == tenant_id,
@@ -188,7 +170,6 @@ class LoanService:
         admin_result = await db.execute(admin_query)
         admins = list(admin_result.scalars().all())
         
-        # Send notification to each admin
         for admin in admins:
             await NotificationService.create_notification(
                 db=db,
@@ -221,23 +202,19 @@ class LoanService:
         if loan.status != LoanStatus.APPLIED:
             raise ValueError(f"Cannot process loan with status {loan.status.value}")
         
-        # Import required models and enums
         from app.models.transaction import Transaction
         from app.models.enums import TransactionType, TransactionStatus, ReferenceType, NotificationType
         from app.services.notification_service import NotificationService
         
-        # Store transaction ID for notifications (if approval)
         loan_transaction_id = None
         account_number = None
         new_balance = None
         
         if decision.decision == "APPROVED":
-            # Update loan status
             loan.status = LoanStatus.APPROVED
             loan.decided_by = admin_id
             loan.decided_at = datetime.now(timezone.utc)
             
-            # Create CREDIT transaction for loan disbursement
             loan_transaction = Transaction(
                 tenant_id=tenant_id,
                 account_id=loan.account_id,
@@ -245,38 +222,32 @@ class LoanService:
                 transaction_type=TransactionType.CREDIT,
                 reference_type=ReferenceType.LOAN,
                 amount=loan.principal_amount,
-                status=TransactionStatus.SUCCESS  # Loan disbursement is immediate
+                status=TransactionStatus.SUCCESS 
             )
             
             db.add(loan_transaction)
             
-            # Update account balance
             account = await db.get(Account, loan.account_id)
             if not account:
                 raise ValueError("Account not found for loan disbursement")
             
             account.balance += loan.principal_amount
             
-            # Flush to get transaction ID
             await db.flush()
             loan_transaction_id = loan_transaction.id
             account_number = account.account_number
             new_balance = account.balance
             
-        else:  # REJECTED
-            # Update loan status
+        else: 
             loan.status = LoanStatus.REJECTED
             loan.decided_by = admin_id
             loan.decided_at = datetime.now(timezone.utc)
             loan.rejection_reason = decision.rejection_reason
         
-        # Commit all database changes atomically
         await db.commit()
         await db.refresh(loan)
         
-        # Send notifications AFTER successful commit
         if decision.decision == "APPROVED":
-            # Send notification to USER about loan approval
             await NotificationService.create_notification(
                 db=db,
                 tenant_id=loan.tenant_id,
@@ -288,7 +259,6 @@ class LoanService:
                 send_websocket=True
             )
             
-            # Send loan disbursement notification
             await NotificationService.create_notification(
                 db=db,
                 tenant_id=loan.tenant_id,
@@ -300,8 +270,7 @@ class LoanService:
                 send_websocket=True
             )
             
-        else:  # REJECTED
-            # Send notification to USER about loan rejection
+        else: 
             rejection_message = f"Your loan application for ₹{loan.principal_amount / 100:,.2f} has been rejected."
             if decision.rejection_reason:
                 rejection_message += f" Reason: {decision.rejection_reason}"

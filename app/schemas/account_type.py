@@ -9,7 +9,7 @@ class AccountTypeCreate(BaseModel):
     
     @field_validator("name")
     def validate_name(cls, v: str) -> str:
-        v = " ".join(v.split())  # Remove extra spaces
+        v = " ".join(v.split())  
         if len(v) < 2:
             raise ValueError("Account type name must be at least 2 characters")
         return v
@@ -46,7 +46,7 @@ class AccountTypeWithRulesResponse(BaseModel):
     tenant_id: uuid.UUID
     name: str
     is_active: bool
-    interest_rules: list[dict]  # Will be populated by service
+    interest_rules: list[dict]  
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)

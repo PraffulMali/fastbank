@@ -38,7 +38,6 @@ class NotificationService:
         await db.commit()
         await db.refresh(notification)
         
-        # Send WebSocket notification if enabled
         if send_websocket:
             await NotificationService.send_websocket_notification(notification)
         
@@ -77,7 +76,6 @@ class NotificationService:
         if unread_only:
             query = query.where(Notification.is_read == False)
         
-        # Order by creation date descending (newest first)
         query = query.order_by(Notification.created_at.desc())
         
         return await paginator.paginate(db, query)

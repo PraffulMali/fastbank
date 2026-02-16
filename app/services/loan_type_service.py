@@ -19,7 +19,6 @@ class LoanTypeService:
         loan_type_in: LoanTypeCreate,
         tenant_id: uuid.UUID
     ) -> LoanType:
-        # Check for duplicate name within tenant
         existing_query = select(LoanType).where(
             and_(
                 LoanType.tenant_id == tenant_id,
@@ -31,7 +30,6 @@ class LoanTypeService:
         if result.scalar_one_or_none():
             raise ValueError(f"Loan type '{loan_type_in.name}' already exists in this tenant")
         
-        # Create loan type
         new_loan_type = LoanType(
             tenant_id=tenant_id,
             name=loan_type_in.name,
@@ -78,13 +76,10 @@ class LoanTypeService:
         if not loan_type:
             return None
         
-        # Verify ownership
         if loan_type.tenant_id != tenant_id:
             raise PermissionError("Cannot update loan type from different tenant")
         
-        # Update name if provided
         if loan_type_update.name is not None:
-            # Check for duplicate name
             duplicate_query = select(LoanType).where(
                 and_(
                     LoanType.tenant_id == tenant_id,
@@ -99,7 +94,6 @@ class LoanTypeService:
             
             loan_type.name = loan_type_update.name
         
-        # Update is_active if provided
         if loan_type_update.is_active is not None:
             loan_type.is_active = loan_type_update.is_active
             if loan_type_update.is_active:
@@ -121,11 +115,9 @@ class LoanTypeService:
         if not loan_type:
             raise ValueError("Loan type not found")
         
-        # Verify ownership
         if loan_type.tenant_id != tenant_id:
             raise PermissionError("Cannot delete loan type from different tenant")
         
-        # Check if any loans use this loan type
         loans_query = select(func.count()).select_from(Loan).where(
             Loan.loan_type_id == loan_type_id
         )
@@ -138,7 +130,6 @@ class LoanTypeService:
                 "Set loan type to inactive instead."
             )
         
-        # Check if any interest rules use this loan type
         rules_query = select(func.count()).select_from(InterestRule).where(
             InterestRule.loan_type_id == loan_type_id
         )
@@ -151,7 +142,6 @@ class LoanTypeService:
                 "Delete the interest rules first or set loan type to inactive."
             )
         
-        # Safe to delete
         await db.delete(loan_type)
         await db.commit()
     
@@ -165,7 +155,6 @@ class LoanTypeService:
         if not loan_type or loan_type.tenant_id != tenant_id:
             return None
         
-        # Get interest rate for this loan type
         rate_query = select(InterestRule).where(
             and_(
                 InterestRule.loan_type_id == loan_type_id,

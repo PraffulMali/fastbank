@@ -22,13 +22,10 @@ class TransactionBackgroundTasks:
     async def process_transfer(reference_id: uuid.UUID):
         async with AsyncSessionLocal() as db:
             try:
-                # Simulate processing delay
                 await asyncio.sleep(5)
 
-                # ✅ START ATOMIC TRANSACTION
                 async with db.begin():
 
-                    # Fetch transactions
                     query = select(Transaction).where(
                         Transaction.reference_id == reference_id
                     )
@@ -39,7 +36,6 @@ class TransactionBackgroundTasks:
                         logger.error(f"Transfer {reference_id}: Expected 2 transactions")
                         return
 
-                    # Identify transactions
                     debit_txn = next(
                         txn for txn in transactions
                         if txn.transaction_type == TransactionType.DEBIT
@@ -50,7 +46,6 @@ class TransactionBackgroundTasks:
                         if txn.transaction_type == TransactionType.CREDIT
                     )
 
-                    # Validate states
                     if (
                         debit_txn.status != TransactionStatus.PENDING
                         or credit_txn.status != TransactionStatus.PENDING
@@ -58,7 +53,6 @@ class TransactionBackgroundTasks:
                         logger.warning(f"Transfer {reference_id}: Not PENDING")
                         return
 
-                    # ✅ LOCK ACCOUNT ROWS 🔥 CRITICAL FIX
                     debit_account = (
                         await db.execute(
                             select(Account)
@@ -82,7 +76,6 @@ class TransactionBackgroundTasks:
                         credit_txn.status = TransactionStatus.FAILED
                         return
 
-                    # Balance check
                     if debit_account.balance < debit_txn.amount:
                         logger.error(f"Transfer {reference_id}: Insufficient balance")
 
@@ -90,24 +83,19 @@ class TransactionBackgroundTasks:
                         credit_txn.status = TransactionStatus.FAILED
                         return
 
-                    # ✅ SAFE ATOMIC UPDATE
                     debit_account.balance -= debit_txn.amount
                     credit_account.balance += credit_txn.amount
 
                     debit_txn.status = TransactionStatus.SUCCESS
                     credit_txn.status = TransactionStatus.SUCCESS
 
-                # ✅ AUTO COMMIT happens here
-
                 logger.info(f"Transfer {reference_id}: SUCCESS")
 
-                # Refresh updated objects
                 await db.refresh(debit_txn)
                 await db.refresh(credit_txn)
                 await db.refresh(debit_account)
                 await db.refresh(credit_account)
 
-                # Send notifications (outside transaction)
                 await TransactionBackgroundTasks._send_transaction_notifications(
                     db, debit_txn, credit_txn, debit_account, credit_account
                 )
@@ -115,11 +103,8 @@ class TransactionBackgroundTasks:
             except Exception as e:
                 logger.error(f"Transfer {reference_id}: Error - {e}")
 
-                # ✅ No manual rollback needed if error occurs inside db.begin()
-                # But safe to call defensively
                 await db.rollback()
 
-                # Try marking FAILED (new transaction)
                 try:
                     async with db.begin():
 
@@ -163,11 +148,9 @@ class TransactionBackgroundTasks:
         
         logger.info(f"Transfer {debit_txn.reference_id}: FAILED - {reason}")
         
-        # Get accounts to fetch user info
         debit_account = await db.get(Account, debit_txn.account_id)
         
         if debit_account:
-            # Send failure notification to sender
             await NotificationService.create_notification(
                 db=db,
                 tenant_id=debit_txn.tenant_id,
@@ -186,7 +169,6 @@ class TransactionBackgroundTasks:
         debit_account: Account,
         credit_account: Account
     ):
-        # Notification to sender (debit)
         try:
             await NotificationService.create_notification(
                 db=db,
@@ -200,7 +182,6 @@ class TransactionBackgroundTasks:
         except Exception as e:
             logger.error(f"Failed to send success notification to sender {debit_account.user_id}: {e}")
         
-        # Notification to receiver (credit)
         try:
             await NotificationService.create_notification(
                 db=db,
@@ -214,10 +195,8 @@ class TransactionBackgroundTasks:
         except Exception as e:
             logger.error(f"Failed to send success notification to receiver {credit_account.user_id}: {e}")
         
-        # High-value transaction alert to admins (e.g., > 100,000 Rupees = 10,000,000 Paise)
         if debit_txn.amount > 100000 * 100:
             try:
-                # Get all admin users in both tenants
                 admin_query = select(User).where(
                     and_(
                         User.role.in_(["ADMIN"]),

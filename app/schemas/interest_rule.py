@@ -8,15 +8,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class InterestRuleCreate(BaseModel):
     rule_type: str = Field(..., description="ACCOUNT or LOAN")
     
-    # For ACCOUNT rules
     account_type_id: Optional[uuid.UUID] = None
     min_balance: Optional[Decimal] = Field(None, ge=0, description="Minimum balance in rupees")
     max_balance: Optional[Decimal] = Field(None, ge=0, description="Maximum balance in rupees (NULL = unlimited)")
     
-    # For LOAN rules
     loan_type_id: Optional[uuid.UUID] = None
     
-    # Interest rate (percentage)
     interest_rate: Decimal = Field(..., ge=0, le=100, decimal_places=2, description="Interest rate as percentage")
     
     @field_validator("rule_type")
@@ -29,11 +26,9 @@ class InterestRuleCreate(BaseModel):
     @model_validator(mode='after')
     def validate_rule_constraints(self):
         if self.rule_type == "LOAN":
-            # LOAN rules require loan_type_id
             if not self.loan_type_id:
                 raise ValueError("loan_type_id is required for LOAN rules")
             
-            # LOAN rules must NOT have account fields
             if self.account_type_id:
                 raise ValueError("LOAN rules cannot have account_type_id")
             if self.min_balance is not None:
@@ -42,17 +37,14 @@ class InterestRuleCreate(BaseModel):
                 raise ValueError("LOAN rules cannot have max_balance")
         
         elif self.rule_type == "ACCOUNT":
-            # ACCOUNT rules require account_type_id and min_balance
             if not self.account_type_id:
                 raise ValueError("account_type_id is required for ACCOUNT rules")
             if self.min_balance is None:
                 raise ValueError("min_balance is required for ACCOUNT rules")
             
-            # ACCOUNT rules must NOT have loan_type_id
             if self.loan_type_id:
                 raise ValueError("ACCOUNT rules cannot have loan_type_id")
             
-            # Validate balance range
             if self.max_balance is not None and self.max_balance <= self.min_balance:
                 raise ValueError("max_balance must be greater than min_balance")
         

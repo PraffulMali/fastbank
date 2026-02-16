@@ -217,7 +217,6 @@ async def list_loan_repayments(
 ):
     from sqlalchemy import select
 
-    # Verify loan exists and belongs to tenant
     loan = await LoanService.get_loan_by_id(db, loan_id)
     if not loan:
         raise HTTPException(
@@ -245,7 +244,6 @@ async def get_loan_repayment(
 ):
     from sqlalchemy import select
 
-    # Verify loan exists and belongs to tenant
     loan = await LoanService.get_loan_by_id(db, loan_id)
     if not loan:
         raise HTTPException(

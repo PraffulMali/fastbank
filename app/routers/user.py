@@ -36,7 +36,6 @@ async def create_user(
     try:
         new_user, token, temp_password = await UserService.create_user(db, user_in, current_user)
         
-        # Send verification email asynchronously
         background_tasks.add_task(
             EmailService.send_verification_email,
             new_user.email,

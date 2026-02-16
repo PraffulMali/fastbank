@@ -32,7 +32,6 @@ class EmailService:
             if html_body:
                 message.add_alternative(html_body, subtype="html")
 
-            # ✅ PRODUCTION SMTP
             if settings.SMTP_USER and settings.SMTP_PASSWORD:
 
                 await aiosmtplib.send(
@@ -48,7 +47,6 @@ class EmailService:
                 logger.info(f"Email successfully sent to {to_email}")
 
             else:
-                # ✅ DEVELOPMENT FALLBACK
                 logger.info("SMTP not configured — logging email instead")
                 logger.info(f"[EMAIL] To: {to_email}")
                 logger.info(f"[EMAIL] Subject: {subject}")
@@ -62,46 +60,37 @@ class EmailService:
 
     @staticmethod
     async def send_verification_email(email: str, token: str, temp_password: str, user_id: str):
-        # 1. Store hashed token in Redis with 15 minutes TTL
         hashed_token = hash_token(token)
         redis = await get_redis()
         await redis.setex(f"verify_token:{hashed_token}", 900, str(user_id))
         
-        # 2. Get content
         verify_link = f"{settings.FRONTEND_URL}/verify?token={token}"
         subject, content = EmailTemplates.get_verification_email("", verify_link, temp_password) # username unknown here, kept generic
         
-        # 3. Send email
         await EmailService.send_email(email, subject, content)
         logger.info(f"Verification email task completed for {email}")
 
     @staticmethod
     async def send_password_reset_email(email: str, token: str, user_id: str):
-        # 1. Store hashed token in Redis with 15 minutes TTL
         hashed_token = hash_token(token)
         redis = await get_redis()
         await redis.setex(f"reset_token:{hashed_token}", 900, str(user_id))
         
-        # 2. Get content
         reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
         subject, content = EmailTemplates.get_password_reset_email(reset_link)
         
-        # 3. Send email
         await EmailService.send_email(email, subject, content)
         logger.info(f"Password reset email sent to {email}")
 
     @staticmethod
     async def send_verification_resend_email(email: str, token: str, user_id: str):
-        # 1. Store hashed token in Redis with 15 minutes TTL
         hashed_token = hash_token(token)
         redis = await get_redis()
         await redis.setex(f"verify_token:{hashed_token}", 900, str(user_id))
         
-        # 2. Get content
         verify_link = f"{settings.FRONTEND_URL}/verify?token={token}"
         subject, content = EmailTemplates.get_verification_resend_email(verify_link)
         
-        # 3. Send email
         await EmailService.send_email(email, subject, content)
         logger.info(f"Verification resend email sent to {email}")
 

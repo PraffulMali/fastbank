@@ -33,7 +33,6 @@ class AccountService:
         user_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> Account:
-        # Validate user exists and belongs to the same tenant
         user = await db.get(User, user_id)
         if not user:
             raise ValueError("User not found")
@@ -44,7 +43,6 @@ class AccountService:
         if not user.is_active:
             raise ValueError("Cannot create account for inactive user")
         
-        # Validate account type exists for this tenant
         account_type_id = account_in.account_type_id
         account_type = await db.get(AccountType, account_type_id)
         
@@ -54,7 +52,6 @@ class AccountService:
         if account_type.tenant_id != tenant_id:
             raise ValueError("Account type does not belong to this tenant")
         
-        # Check if user already has an account of this type in this tenant
         existing_query = select(Account).where(
             and_(
                 Account.tenant_id == tenant_id,
@@ -69,13 +66,11 @@ class AccountService:
         if existing_account:
             raise ValueError(f"User already has an active {account_type.name} account")
         
-        # Generate unique account number
         account_number = None
         max_attempts = 10
         for _ in range(max_attempts):
             account_number = AccountService.generate_account_number()
             
-            # Check if account number already exists
             check_query = select(Account).where(Account.account_number == account_number)
             check_result = await db.execute(check_query)
             if not check_result.scalar_one_or_none():
@@ -212,7 +207,6 @@ class AccountService:
         if not account:
             return None
         
-        # Only allow setting is_active to True (reactivation)
         if account_update.is_active:
             account.is_active = True
             account.deleted_at = None
@@ -233,7 +227,6 @@ class AccountService:
         if not account.is_active:
             raise ValueError("Account is already deleted")
         
-        # Check if account has balance (optional - remove if you want to allow)
         if account.balance > 0:
             raise ValueError("Cannot delete account with non-zero balance. Please withdraw funds first.")
         

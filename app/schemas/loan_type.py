@@ -9,7 +9,7 @@ class LoanTypeCreate(BaseModel):
     
     @field_validator("name")
     def validate_name(cls, v: str) -> str:
-        v = " ".join(v.split())  # Remove extra spaces
+        v = " ".join(v.split())  
         if len(v) < 2:
             raise ValueError("Loan type name must be at least 2 characters")
         return v
@@ -46,7 +46,7 @@ class LoanTypeWithRateResponse(BaseModel):
     tenant_id: uuid.UUID
     name: str
     is_active: bool
-    interest_rate: Optional[float] = None  # From interest_rules
+    interest_rate: Optional[float] = None  
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)

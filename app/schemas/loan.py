@@ -16,7 +16,7 @@ class LoanCreate(BaseModel):
     def validate_principal(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Principal amount must be greater than 0")
-        if v > Decimal("10000000.00"):  # 1 crore max
+        if v > Decimal("10000000.00"):  
             raise ValueError("Principal amount cannot exceed ₹1,00,00,000")
         return v
     
@@ -134,7 +134,7 @@ class AdvanceLoanRepaymentRequest(BaseModel):
     def validate_payment_amount(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Payment amount must be greater than zero")
-        if v > Decimal("100000000.00"):  # 10 crore max
+        if v > Decimal("100000000.00"):  
             raise ValueError("Payment amount cannot exceed ₹10,00,00,000")
         return v
 
