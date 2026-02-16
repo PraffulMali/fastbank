@@ -1,6 +1,14 @@
 from typing import Annotated
 import uuid
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query, status
+from fastapi import (
+    APIRouter,
+    WebSocket,
+    WebSocketDisconnect,
+    Depends,
+    Query,
+    status,
+    HTTPException,
+)
 from jose import JWTError, jwt
 import logging
 

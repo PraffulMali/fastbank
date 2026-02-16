@@ -80,7 +80,6 @@ class AccountService:
         else:
             raise ValueError("Failed to generate unique account number")
 
-        # Create account
         new_account = Account(
             tenant_id=tenant_id,
             user_id=user_id,

@@ -14,11 +14,22 @@ from app.routers import (
 from app.routers import websocket as ws_router
 from app.routers import notification
 from app.celery.app import celery_app
+from app.database.redis import get_redis, close_redis
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await get_redis()
+    yield
+    await close_redis()
+
 
 app = FastAPI(
     title="FastBank API",
     description="FastAPI Banking Project with WebSocket Support",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
