@@ -12,9 +12,9 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     broker_connection_retry_on_startup=True,
-    beat_schedule=beat_schedule,   
+    beat_schedule=beat_schedule,
 )
 
 celery_app.autodiscover_tasks(["app.celery"])
 
-import app.celery.tasks   
+import app.celery.tasks

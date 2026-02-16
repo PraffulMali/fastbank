@@ -13,7 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.models.base import BaseModel
-from app.models.enums import TransactionStatus  
+from app.models.enums import TransactionStatus
 
 if TYPE_CHECKING:
     from app.models.loan import Loan
@@ -28,14 +28,14 @@ class LoanRepayment(BaseModel):
         UUID(as_uuid=True),
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     loan_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("loans.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     transaction_id: Mapped[uuid.UUID] = mapped_column(
@@ -43,61 +43,45 @@ class LoanRepayment(BaseModel):
         ForeignKey("transactions.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
-        index=True
+        index=True,
     )
 
-    amount_paid: Mapped[int] = mapped_column(
-        BigInteger,
-        nullable=False
-    )
+    amount_paid: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
-    principal_component: Mapped[int] = mapped_column(
-        BigInteger,
-        nullable=False
-    )
+    principal_component: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
-    interest_component: Mapped[int] = mapped_column(
-        BigInteger,
-        nullable=False
-    )
+    interest_component: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
     payment_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     status: Mapped[TransactionStatus] = mapped_column(
-        SQLEnum(TransactionStatus, name="repayment_status_enum", create_constraint=True),
+        SQLEnum(
+            TransactionStatus, name="repayment_status_enum", create_constraint=True
+        ),
         nullable=False,
         default=TransactionStatus.SUCCESS,
-        index=True
+        index=True,
     )
 
+    tenant: Mapped["Tenant"] = relationship("Tenant", lazy="selectin")
 
-    tenant: Mapped["Tenant"] = relationship(
-        "Tenant",
-        lazy="selectin"
-    )
+    loan: Mapped["Loan"] = relationship("Loan", lazy="selectin")
 
-    loan: Mapped["Loan"] = relationship(
-        "Loan",
-        lazy="selectin"
-    )
-
-    transaction: Mapped["Transaction"] = relationship(
-        "Transaction",
-        lazy="selectin"
-    )
-
+    transaction: Mapped["Transaction"] = relationship("Transaction", lazy="selectin")
 
     __table_args__ = (
         CheckConstraint("amount_paid > 0", name="check_amount_paid_positive"),
-        CheckConstraint("principal_component >= 0", name="check_principal_component_valid"),
-        CheckConstraint("interest_component >= 0", name="check_interest_component_valid"),
+        CheckConstraint(
+            "principal_component >= 0", name="check_principal_component_valid"
+        ),
+        CheckConstraint(
+            "interest_component >= 0", name="check_interest_component_valid"
+        ),
         CheckConstraint(
             "principal_component + interest_component = amount_paid",
-            name="check_payment_split_valid"
+            name="check_payment_split_valid",
         ),
     )
 

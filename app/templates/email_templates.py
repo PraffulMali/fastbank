@@ -1,19 +1,22 @@
 from app.config.settings import settings
 
+
 class EmailTemplates:
     @staticmethod
-    def get_verification_email(user_name: str, verify_link: str, temp_password: str = None) -> tuple[str, str]:
+    def get_verification_email(
+        user_name: str, verify_link: str, temp_password: str = None
+    ) -> tuple[str, str]:
         subject = "Welcome to FastBank - Verify Your Account"
-        
+
         content = f"""
         Hello {user_name},
         
         Welcome to FastBank! Your account has been created.
         """
-        
+
         if temp_password:
             content += f"\n        Your temporary password is: {temp_password}\n"
-            
+
         content += f"""
         Please verify your account by clicking the link below (valid for 15 minutes):
         {verify_link}
@@ -59,11 +62,11 @@ class EmailTemplates:
         loan_amount: float,
         emi_amount: float,
         account_balance: float,
-        due_date: str
+        due_date: str,
     ) -> tuple[str, str]:
         subject = "EMI Payment Failed - Insufficient Funds"
         shortfall = emi_amount - account_balance
-        
+
         content = f"""
         Dear {user_name},
 
@@ -89,13 +92,11 @@ class EmailTemplates:
 
     @staticmethod
     def get_advance_repayment_failure_email(
-        user_name: str,
-        payment_amount: float,
-        account_balance: float
+        user_name: str, payment_amount: float, account_balance: float
     ) -> tuple[str, str]:
         subject = "Advance Loan Repayment Failed - Insufficient Funds"
         shortfall = payment_amount - account_balance
-        
+
         content = f"""
         Dear {user_name},
 

@@ -15,10 +15,7 @@ class EmailService:
 
     @staticmethod
     async def send_email(
-        to_email: str,
-        subject: str,
-        body: str,
-        html_body: Optional[str] = None
+        to_email: str, subject: str, body: str, html_body: Optional[str] = None
     ) -> bool:
 
         try:
@@ -59,14 +56,18 @@ class EmailService:
             return False
 
     @staticmethod
-    async def send_verification_email(email: str, token: str, temp_password: str, user_id: str):
+    async def send_verification_email(
+        email: str, token: str, temp_password: str, user_id: str
+    ):
         hashed_token = hash_token(token)
         redis = await get_redis()
         await redis.setex(f"verify_token:{hashed_token}", 900, str(user_id))
-        
+
         verify_link = f"{settings.FRONTEND_URL}/verify?token={token}"
-        subject, content = EmailTemplates.get_verification_email("", verify_link, temp_password) # username unknown here, kept generic
-        
+        subject, content = EmailTemplates.get_verification_email(
+            "", verify_link, temp_password
+        )  # username unknown here, kept generic
+
         await EmailService.send_email(email, subject, content)
         logger.info(f"Verification email task completed for {email}")
 
@@ -75,10 +76,10 @@ class EmailService:
         hashed_token = hash_token(token)
         redis = await get_redis()
         await redis.setex(f"reset_token:{hashed_token}", 900, str(user_id))
-        
+
         reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
         subject, content = EmailTemplates.get_password_reset_email(reset_link)
-        
+
         await EmailService.send_email(email, subject, content)
         logger.info(f"Password reset email sent to {email}")
 
@@ -87,10 +88,10 @@ class EmailService:
         hashed_token = hash_token(token)
         redis = await get_redis()
         await redis.setex(f"verify_token:{hashed_token}", 900, str(user_id))
-        
+
         verify_link = f"{settings.FRONTEND_URL}/verify?token={token}"
         subject, content = EmailTemplates.get_verification_resend_email(verify_link)
-        
+
         await EmailService.send_email(email, subject, content)
         logger.info(f"Verification resend email sent to {email}")
 
@@ -101,7 +102,7 @@ class EmailService:
         loan_amount: float,
         emi_amount: float,
         account_balance: float,
-        due_date: str
+        due_date: str,
     ) -> bool:
         subject, body = EmailTemplates.get_emi_failure_email(
             user_name, loan_amount, emi_amount, account_balance, due_date
@@ -110,10 +111,7 @@ class EmailService:
 
     @staticmethod
     async def send_advance_repayment_failure_email(
-        to_email: str,
-        user_name: str,
-        payment_amount: float,
-        account_balance: float
+        to_email: str, user_name: str, payment_amount: float, account_balance: float
     ) -> bool:
         subject, body = EmailTemplates.get_advance_repayment_failure_email(
             user_name, payment_amount, account_balance

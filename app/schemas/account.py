@@ -28,7 +28,7 @@ class AccountResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("account_type", mode="before")
@@ -42,7 +42,6 @@ class AccountResponse(BaseModel):
         if isinstance(v, int):
             return Decimal(v) / 100
         return v
-
 
 
 class AccountUserSingleResponse(BaseModel):
@@ -54,7 +53,7 @@ class AccountUserSingleResponse(BaseModel):
     currency: str
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("account_type", mode="before")
@@ -62,7 +61,7 @@ class AccountUserSingleResponse(BaseModel):
         if hasattr(v, "name"):
             return v.name
         return str(v)
-    
+
     @field_validator("balance", mode="before")
     def convert_balance_to_rupees(cls, v):
         if isinstance(v, int):
@@ -70,8 +69,7 @@ class AccountUserSingleResponse(BaseModel):
         return v
 
 
-
 class AccountUserResponse(BaseModel):
     accounts: List[AccountUserSingleResponse]
-    
+
     model_config = ConfigDict(from_attributes=True)

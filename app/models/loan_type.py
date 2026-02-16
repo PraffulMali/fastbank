@@ -15,30 +15,22 @@ class LoanType(BaseModel):
     __tablename__ = "loan_types"
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id"),
-        nullable=False
+        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False
     )
 
     name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     tenant: Mapped["Tenant"] = relationship(
-        "Tenant",
-        back_populates="loan_types",
-        lazy="selectin"
+        "Tenant", back_populates="loan_types", lazy="selectin"
     )
 
     interest_rules: Mapped[list["InterestRule"]] = relationship(
-        "InterestRule",
-        back_populates="loan_type",
-        lazy="selectin"
+        "InterestRule", back_populates="loan_type", lazy="selectin"
     )
 
     loans: Mapped[list["Loan"]] = relationship(
-        "Loan",
-        back_populates="loan_type",
-        lazy="selectin"
+        "Loan", back_populates="loan_type", lazy="selectin"
     )
-    
+
     def __repr__(self) -> str:
         return f"<LoanType(id={self.id}, name={self.name})>"

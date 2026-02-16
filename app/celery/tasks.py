@@ -1,4 +1,3 @@
-
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -17,7 +16,9 @@ def process_monthly_emi_deductions():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        logger.info(f"[EMI Task] Starting monthly EMI deduction process at {datetime.now(timezone.utc)}")
+        logger.info(
+            f"[EMI Task] Starting monthly EMI deduction process at {datetime.now(timezone.utc)}"
+        )
         stats = loop.run_until_complete(_process_monthly_emi_deductions_task())
         logger.info(f"[EMI Task] Completed. Stats: {stats}")
         return stats
@@ -32,9 +33,9 @@ async def _process_monthly_emi_deductions_task():
     async with AsyncSessionLocal() as db:
         try:
             stats = await LoanRepaymentService.process_monthly_emis(db)
-            
+
             await db.commit()
-            
+
             return stats
         except Exception as e:
             await db.rollback()
@@ -44,13 +45,16 @@ async def _process_monthly_emi_deductions_task():
 
 from app.services.interest_rule_service import InterestRuleService
 
+
 @celery_app.task(name="app.celery.tasks.process_monthly_interest_accrual")
 def process_monthly_interest_accrual():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
+
     try:
-        logger.info(f"[Interest Task] Starting monthly interest accrual at {datetime.now(timezone.utc)}")
+        logger.info(
+            f"[Interest Task] Starting monthly interest accrual at {datetime.now(timezone.utc)}"
+        )
         stats = loop.run_until_complete(_process_monthly_interest_accrual_task())
         logger.info(f"[Interest Task] Completed. Stats: {stats}")
         return stats

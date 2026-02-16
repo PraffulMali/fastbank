@@ -5,11 +5,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AccountTypeCreate(BaseModel):
-    name: str = Field(..., min_length=2, max_length=100, description="Account type name")
-    
+    name: str = Field(
+        ..., min_length=2, max_length=100, description="Account type name"
+    )
+
     @field_validator("name")
     def validate_name(cls, v: str) -> str:
-        v = " ".join(v.split())  
+        v = " ".join(v.split())
         if len(v) < 2:
             raise ValueError("Account type name must be at least 2 characters")
         return v
@@ -18,7 +20,7 @@ class AccountTypeCreate(BaseModel):
 class AccountTypeUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     is_active: Optional[bool] = None
-    
+
     @field_validator("name")
     def validate_name(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
@@ -37,7 +39,7 @@ class AccountTypeResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -46,7 +48,7 @@ class AccountTypeWithRulesResponse(BaseModel):
     tenant_id: uuid.UUID
     name: str
     is_active: bool
-    interest_rules: list[dict]  
+    interest_rules: list[dict]
     created_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)

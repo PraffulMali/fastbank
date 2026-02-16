@@ -11,10 +11,9 @@ from app.dependencies import require_super_admin
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(
-    prefix="/tenants",
-    tags=["Tenants"],
-    dependencies=[Depends(require_super_admin)]
+    prefix="/tenants", tags=["Tenants"], dependencies=[Depends(require_super_admin)]
 )
+
 
 @router.post("/", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(
@@ -24,17 +23,15 @@ async def create_tenant(
     try:
         return await TenantService.create_tenant(db, tenant_in)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 
 @router.get("/", response_model=Page[TenantResponse])
 async def list_tenants(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    paginator: Paginator = Depends()
+    db: Annotated[AsyncSession, Depends(get_db)], paginator: Paginator = Depends()
 ):
     return await TenantService.list_tenants(db, paginator)
+
 
 @router.get("/{tenant_id}", response_model=TenantResponse)
 async def get_tenant(
@@ -44,10 +41,10 @@ async def get_tenant(
     tenant = await TenantService.get_tenant(db, tenant_id)
     if not tenant:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tenant not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
         )
     return tenant
+
 
 @router.patch("/{tenant_id}", response_model=TenantResponse)
 async def update_tenant(
@@ -59,15 +56,12 @@ async def update_tenant(
         tenant = await TenantService.update_tenant(db, tenant_id, tenant_update)
         if not tenant:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Tenant not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
             )
         return tenant
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 
 @router.delete("/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tenant(
@@ -78,11 +72,7 @@ async def delete_tenant(
         tenant = await TenantService.soft_delete_tenant(db, tenant_id)
         if not tenant:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Tenant not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
             )
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

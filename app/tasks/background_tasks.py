@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class TransactionBackgroundTasks:
-    
+
     @staticmethod
     async def process_transfer(reference_id: uuid.UUID):
         async with AsyncSessionLocal() as db:
@@ -33,16 +33,20 @@ class TransactionBackgroundTasks:
                     transactions = list(result.scalars().all())
 
                     if len(transactions) != 2:
-                        logger.error(f"Transfer {reference_id}: Expected 2 transactions")
+                        logger.error(
+                            f"Transfer {reference_id}: Expected 2 transactions"
+                        )
                         return
 
                     debit_txn = next(
-                        txn for txn in transactions
+                        txn
+                        for txn in transactions
                         if txn.transaction_type == TransactionType.DEBIT
                     )
 
                     credit_txn = next(
-                        txn for txn in transactions
+                        txn
+                        for txn in transactions
                         if txn.transaction_type == TransactionType.CREDIT
                     )
 
@@ -116,12 +120,14 @@ class TransactionBackgroundTasks:
 
                         if len(transactions) == 2:
                             debit_txn = next(
-                                txn for txn in transactions
+                                txn
+                                for txn in transactions
                                 if txn.transaction_type == TransactionType.DEBIT
                             )
 
                             credit_txn = next(
-                                txn for txn in transactions
+                                txn
+                                for txn in transactions
                                 if txn.transaction_type == TransactionType.CREDIT
                             )
 
@@ -129,27 +135,25 @@ class TransactionBackgroundTasks:
                             credit_txn.status = TransactionStatus.FAILED
 
                 except Exception as nested_error:
-                    logger.error(f"Transfer {reference_id}: Failed to mark FAILED - {nested_error}")
+                    logger.error(
+                        f"Transfer {reference_id}: Failed to mark FAILED - {nested_error}"
+                    )
 
-    
     @staticmethod
     async def _mark_transfer_failed(
-        db: AsyncSession,
-        debit_txn: Transaction,
-        credit_txn: Transaction,
-        reason: str
+        db: AsyncSession, debit_txn: Transaction, credit_txn: Transaction, reason: str
     ):
         debit_txn.status = TransactionStatus.FAILED
         credit_txn.status = TransactionStatus.FAILED
-        
+
         await db.commit()
         await db.refresh(debit_txn)
         await db.refresh(credit_txn)
-        
+
         logger.info(f"Transfer {debit_txn.reference_id}: FAILED - {reason}")
-        
+
         debit_account = await db.get(Account, debit_txn.account_id)
-        
+
         if debit_account:
             await NotificationService.create_notification(
                 db=db,
@@ -158,16 +162,16 @@ class TransactionBackgroundTasks:
                 notification_type=NotificationType.TRANSACTION_FAILED,
                 message=f"Transfer of ₹{debit_txn.amount / 100} failed. Reason: {reason}",
                 reference_id=debit_txn.id,
-                reference_type="transaction"
+                reference_type="transaction",
             )
-    
+
     @staticmethod
     async def _send_transaction_notifications(
         db: AsyncSession,
         debit_txn: Transaction,
         credit_txn: Transaction,
         debit_account: Account,
-        credit_account: Account
+        credit_account: Account,
     ):
         try:
             await NotificationService.create_notification(
@@ -177,11 +181,13 @@ class TransactionBackgroundTasks:
                 notification_type=NotificationType.TRANSACTION_SUCCESS,
                 message=f"Successfully transferred ₹{debit_txn.amount / 100} to account {credit_account.account_number}. New balance: ₹{debit_account.balance / 100}",
                 reference_id=debit_txn.id,
-                reference_type="transaction"
+                reference_type="transaction",
             )
         except Exception as e:
-            logger.error(f"Failed to send success notification to sender {debit_account.user_id}: {e}")
-        
+            logger.error(
+                f"Failed to send success notification to sender {debit_account.user_id}: {e}"
+            )
+
         try:
             await NotificationService.create_notification(
                 db=db,
@@ -190,23 +196,25 @@ class TransactionBackgroundTasks:
                 notification_type=NotificationType.TRANSACTION_SUCCESS,
                 message=f"Received ₹{credit_txn.amount / 100} from account {debit_account.account_number}. New balance: ₹{credit_account.balance / 100}",
                 reference_id=credit_txn.id,
-                reference_type="transaction"
+                reference_type="transaction",
             )
         except Exception as e:
-            logger.error(f"Failed to send success notification to receiver {credit_account.user_id}: {e}")
-        
+            logger.error(
+                f"Failed to send success notification to receiver {credit_account.user_id}: {e}"
+            )
+
         if debit_txn.amount > 100000 * 100:
             try:
                 admin_query = select(User).where(
                     and_(
                         User.role.in_(["ADMIN"]),
                         User.tenant_id.in_([debit_txn.tenant_id, credit_txn.tenant_id]),
-                        User.is_active == True
+                        User.is_active == True,
                     )
                 )
                 result = await db.execute(admin_query)
                 admins = list(result.scalars().all())
-                
+
                 for admin in admins:
                     try:
                         await NotificationService.create_notification(
@@ -216,9 +224,11 @@ class TransactionBackgroundTasks:
                             notification_type=NotificationType.HIGH_VALUE_TRANSACTION,
                             message=f"High-value transfer of ₹{debit_txn.amount / 100} from {debit_account.account_number} to {credit_account.account_number}",
                             reference_id=debit_txn.id,
-                            reference_type="transaction"
+                            reference_type="transaction",
                         )
                     except Exception as e:
-                        logger.error(f"Failed to send high-value notification to admin {admin.id}: {e}")
+                        logger.error(
+                            f"Failed to send high-value notification to admin {admin.id}: {e}"
+                        )
             except Exception as e:
                 logger.error(f"Failed to process high-value notifications: {e}")
