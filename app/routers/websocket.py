@@ -60,10 +60,11 @@ async def websocket_endpoint(
         user = await get_user_from_token(token, db)
         
         # Determine if user is admin
-        is_admin = user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        # Determine if user is admin
+        # is_admin = user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
         
         # Connect to WebSocket manager
-        await manager.connect(websocket, user.id, is_admin)
+        await manager.connect(websocket, user.id)
         
         logger.info(f"WebSocket connected: User {user.id} ({user.email})")
         
