@@ -6,6 +6,7 @@ from sqlalchemy import select, and_, func
 
 from app.models.account_type import AccountType
 from app.models.interest_rule import InterestRule
+from app.models.account import Account
 from app.schemas.account_type import AccountTypeCreate, AccountTypeUpdate
 from app.utils.pagination import Paginator, Page
 
@@ -131,8 +132,10 @@ class AccountTypeService:
     ) -> None:
         """
         Hard delete an account type with protection.
-        Checks if any interest rules reference this account type.
-        Raises ValueError if rules exist.
+        Checks if:
+        1. Any accounts reference this account type
+        2. Any interest rules reference this account type
+        Raises ValueError if either exist.
         """
         account_type = await db.get(AccountType, account_type_id)
         if not account_type:
@@ -142,16 +145,28 @@ class AccountTypeService:
         if account_type.tenant_id != tenant_id:
             raise PermissionError("Cannot delete account type from different tenant")
         
+        # Check if any accounts use this account type
+        accounts_query = select(func.count()).select_from(Account).where(
+            Account.account_type_id == account_type_id
+        )
+        result = await db.execute(accounts_query)
+        accounts_count = result.scalar_one()
+        
+        if accounts_count > 0:
+            raise ValueError(
+                f"Cannot delete account type: {accounts_count} accounts are using it. "
+            )
+        
         # Check if any interest rules use this account type
         rules_query = select(func.count()).select_from(InterestRule).where(
             InterestRule.account_type_id == account_type_id
         )
         result = await db.execute(rules_query)
-        count = result.scalar_one()
+        rules_count = result.scalar_one()
         
-        if count > 0:
+        if rules_count > 0:
             raise ValueError(
-                f"Cannot delete account type: {count} interest rule(s) are using it. "
+                f"Cannot delete account type: {rules_count} interest rules are using it. "
                 "Delete the interest rules first or set account type to inactive."
             )
         
