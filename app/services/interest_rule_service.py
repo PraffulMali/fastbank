@@ -180,37 +180,13 @@ class InterestRuleService:
         db: AsyncSession,
         rule_id: uuid.UUID,
         tenant_id: uuid.UUID
-    ) -> Optional[dict]:
+    ) -> Optional[InterestRule]:
         rule = await db.get(InterestRule, rule_id)
         if not rule or rule.tenant_id != tenant_id:
             return None
         
-        account_type_name = None
-        loan_type_name = None
-        
-        if rule.account_type_id:
-            account_type = await db.get(AccountType, rule.account_type_id)
-            account_type_name = account_type.name if account_type else None
-        
-        if rule.loan_type_id:
-            loan_type = await db.get(LoanType, rule.loan_type_id)
-            loan_type_name = loan_type.name if loan_type else None
-        
-        return {
-            "id": rule.id,
-            "tenant_id": rule.tenant_id,
-            "rule_type": rule.rule_type.value,
-            "account_type_id": rule.account_type_id,
-            "account_type_name": account_type_name,
-            "loan_type_id": rule.loan_type_id,
-            "loan_type_name": loan_type_name,
-            "min_balance": float(rule.min_balance) / 100 if rule.min_balance else None,
-            "max_balance": float(rule.max_balance) / 100 if rule.max_balance else None,
-            "interest_rate": float(rule.interest_rate),
-            "is_active": rule.is_active,
-            "created_at": rule.created_at,
-            "updated_at": rule.updated_at
-        }
+        return rule
+
     
     @staticmethod
     async def process_monthly_interest_accrual(db: AsyncSession) -> dict:

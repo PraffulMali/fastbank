@@ -16,8 +16,6 @@ class ConnectionManager:
         self.admin_users: Set[uuid.UUID] = set()
     
     async def connect(self, websocket: WebSocket, user_id: uuid.UUID, is_admin: bool = False):
-        await websocket.accept()
-        
         if user_id not in self.active_connections:
             self.active_connections[user_id] = []
         

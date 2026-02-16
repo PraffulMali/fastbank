@@ -9,8 +9,7 @@ from app.models.user import User
 from app.schemas.interest_rule import (
     InterestRuleCreate,
     InterestRuleUpdate,
-    InterestRuleResponse,
-    InterestRuleDetailResponse
+    InterestRuleResponse
 )
 from app.services.interest_rule_service import InterestRuleService
 from app.models.enums import UserRole
@@ -54,7 +53,7 @@ async def list_interest_rules(
     )
 
 
-@router.get("/{rule_id}", response_model=InterestRuleDetailResponse)
+@router.get("/{rule_id}", response_model=InterestRuleResponse)
 async def get_interest_rule(
     rule_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],

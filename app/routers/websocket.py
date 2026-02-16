@@ -49,6 +49,9 @@ async def websocket_endpoint(
     token: str = Query(..., description="JWT access token for authentication"),
     db: AsyncSession = Depends(get_db)
 ):
+    # Accept the connection first to allow sending WebSocket close codes (like 1008)
+    await websocket.accept()
+    
     user = None
     manager = get_websocket_manager()
     

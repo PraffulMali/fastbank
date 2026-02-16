@@ -101,6 +101,27 @@ class LoanUserResponse(BaseModel):
         return v
 
 
+class LoanRepaymentResponse(BaseModel):
+    id: uuid.UUID
+    loan_id: uuid.UUID
+    transaction_id: uuid.UUID
+    amount_paid: Decimal
+    principal_component: Decimal
+    interest_component: Decimal
+    payment_date: datetime
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("amount_paid", "principal_component", "interest_component", mode="before")
+    def convert_paise_to_rupees(cls, v):
+        if isinstance(v, int):
+            return Decimal(v) / 100
+        return v
+
+
 class AdvanceLoanRepaymentRequest(BaseModel):
     payment_amount: Decimal = Field(
         ..., 

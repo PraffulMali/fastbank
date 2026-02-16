@@ -12,8 +12,10 @@ from app.schemas.loan import (
     LoanResponse,
     LoanUserResponse,
     AdvanceLoanRepaymentRequest,
-    AdvanceLoanRepaymentResponse
+    AdvanceLoanRepaymentResponse,
+    LoanRepaymentResponse
 )
+from app.models.loan_repayment import LoanRepayment
 from app.services.loan_service import LoanService
 from app.services.advance_loan_repayment_service import AdvanceLoanRepaymentService
 from app.dependencies import get_current_user, require_tenant_admin, require_user
@@ -202,3 +204,70 @@ async def make_advance_loan_repayment(
         message=message,
         **details if details else {}
     )
+
+
+@router.get("/{loan_id}/repayments", response_model=Page[LoanRepaymentResponse])
+async def list_loan_repayments(
+    loan_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_tenant_admin)],
+    paginator: Paginator = Depends()
+):
+    from sqlalchemy import select
+
+    # Verify loan exists and belongs to tenant
+    loan = await LoanService.get_loan_by_id(db, loan_id)
+    if not loan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Loan not found"
+        )
+    
+    if loan.tenant_id != current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot view repayments for loan from different tenant"
+        )
+    
+    query = select(LoanRepayment).where(LoanRepayment.loan_id == loan_id).order_by(LoanRepayment.payment_date.desc())
+    
+    return await paginator.paginate(db, query)
+
+
+@router.get("/{loan_id}/repayments/{repayment_id}", response_model=LoanRepaymentResponse)
+async def get_loan_repayment(
+    loan_id: uuid.UUID,
+    repayment_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_tenant_admin)]
+):
+    from sqlalchemy import select
+
+    # Verify loan exists and belongs to tenant
+    loan = await LoanService.get_loan_by_id(db, loan_id)
+    if not loan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Loan not found"
+        )
+    
+    if loan.tenant_id != current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot view repayments for loan from different tenant"
+        )
+        
+    query = select(LoanRepayment).where(
+        LoanRepayment.id == repayment_id,
+        LoanRepayment.loan_id == loan_id
+    )
+    result = await db.execute(query)
+    repayment = result.scalar_one_or_none()
+    
+    if not repayment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repayment not found"
+        )
+        
+    return repayment

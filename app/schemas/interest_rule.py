@@ -63,12 +63,19 @@ class InterestRuleUpdate(BaseModel):
     interest_rate: Decimal = Field(..., ge=0, le=100, decimal_places=2)
 
 
+class TypeNameResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 class InterestRuleResponse(BaseModel):
     id: uuid.UUID
     tenant_id: uuid.UUID
     rule_type: str
-    account_type_id: Optional[uuid.UUID] = None
-    loan_type_id: Optional[uuid.UUID] = None
+    account_type: Optional[TypeNameResponse] = None
+    loan_type: Optional[TypeNameResponse] = None
     min_balance: Optional[Decimal] = None
     max_balance: Optional[Decimal] = None
     interest_rate: Decimal
@@ -86,27 +93,3 @@ class InterestRuleResponse(BaseModel):
             return Decimal(v) / 100
         return v
 
-
-class InterestRuleDetailResponse(BaseModel):
-    id: uuid.UUID
-    tenant_id: uuid.UUID
-    rule_type: str
-    
-    # Account type info (if ACCOUNT rule)
-    account_type_id: Optional[uuid.UUID] = None
-    account_type_name: Optional[str] = None
-    
-    # Loan type info (if LOAN rule)
-    loan_type_id: Optional[uuid.UUID] = None
-    loan_type_name: Optional[str] = None
-    
-    # Interest rule details
-    min_balance: Optional[Decimal] = None
-    max_balance: Optional[Decimal] = None
-    interest_rate: Decimal
-    
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-    
-    model_config = ConfigDict(from_attributes=True)
