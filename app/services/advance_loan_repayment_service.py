@@ -280,7 +280,7 @@ FastBank Team"""
             
             # 9. Send success notification
             if is_foreclosure:
-                message = f"🎉 Congratulations! Your loan has been fully repaid. Payment of ₹{payment_amount_rupees:,.2f} (Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}) has been processed. Your loan is now FORECLOSED."
+                message = f"Congratulations! Your loan has been fully repaid. Payment of ₹{payment_amount_rupees:,.2f} (Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}) has been processed. Your loan is now FORECLOSED."
             else:
                 message = f"Advance repayment of ₹{payment_amount_rupees:,.2f} processed successfully. Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}. Remaining principal: ₹{remaining_after / 100:,.2f}. New tenure: {new_tenure} months."
             
