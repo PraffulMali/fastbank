@@ -10,37 +10,12 @@ from app.models.user import User
 from app.models.enums import UserRole
 from app.utils.websocket_manager import get_websocket_manager
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.dependencies import verify_token_and_get_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-async def get_user_from_token(token: str, db: AsyncSession) -> User:
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id_str: str = payload.get("sub")
-        
-        if user_id_str is None:
-            raise ValueError("Invalid token")
-        
-        user_id = uuid.UUID(user_id_str)
-        
-        # Get user from database
-        user = await db.get(User, user_id)
-        
-        if user is None:
-            raise ValueError("User not found")
-        
-        if not user.is_active:
-            raise ValueError("User account is inactive")
-        
-        if not user.is_email_verified:
-            raise ValueError("Email not verified")
-        
-        return user
-        
-    except (JWTError, ValueError) as e:
-        raise ValueError(f"Invalid token: {e}")
 
 
 @router.websocket("/ws")
@@ -57,7 +32,7 @@ async def websocket_endpoint(
     
     try:
         # Validate token and get user
-        user = await get_user_from_token(token, db)
+        user = await verify_token_and_get_user(token, db)
         
         # Determine if user is admin
         # Determine if user is admin
@@ -99,10 +74,11 @@ async def websocket_endpoint(
         if user:
             manager.disconnect(websocket, user.id)
     
-    except ValueError as e:
-        logger.error(f"WebSocket authentication error: {e}")
+    except (ValueError, HTTPException) as e:
+        detail = str(e.detail) if hasattr(e, "detail") else str(e)
+        logger.error(f"WebSocket authentication error: {detail}")
         try:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason=str(e))
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason=detail[:120])
         except:
             pass
     

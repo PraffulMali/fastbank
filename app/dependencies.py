@@ -10,37 +10,23 @@ from app.database import get_db
 from app.database.redis import get_redis
 from app.models.user import User
 from app.models.enums import UserRole
+from app.utils.jwt import decode_access_token
 
 security = HTTPBearer(auto_error=False)
 
 
-async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: Annotated[AsyncSession, Depends(get_db)]
-) -> User:
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    token = credentials.credentials
-    
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
+async def verify_token_and_get_user(token: str, db: AsyncSession) -> User:
     try:
         # Decode token
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = decode_access_token(token)
+        if not payload:
+            raise ValueError("Invalid or expired token")
+            
         user_id_str: str = payload.get("sub")
         jti = payload.get("jti")
         
         if user_id_str is None or jti is None:
-            raise credentials_exception
+            raise ValueError("Invalid token payload")
         
         user_id = uuid.UUID(user_id_str)
         
@@ -54,31 +40,47 @@ async def get_current_user(
                 detail="Token has been invalidated. Please login again.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+            
+        # Get user from database
+        user = await db.get(User, user_id)
         
-    except JWTError:
-        raise credentials_exception
-    except ValueError:
-        raise credentials_exception
-    
-    # Get user from database
-    user = await db.get(User, user_id)
-    
-    if user is None:
-        raise credentials_exception
-    
-    if not user.is_active:
+        if user is None:
+            raise ValueError("User not found")
+        
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is inactive"
+            )
+        
+        if not user.is_email_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Email not verified. Please verify your email to access this resource."
+            )
+        
+        return user
+        
+    except (JWTError, ValueError) as e:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+async def get_current_user(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    db: Annotated[AsyncSession, Depends(get_db)]
+) -> User:
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
-    if not user.is_email_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Email not verified. Please verify your email to access this resource."
-        )
-    
-    return user
+    return await verify_token_and_get_user(credentials.credentials, db)
 
 
 async def require_super_admin(
