@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from fastapi import BackgroundTasks
 import logging
 import math
 
@@ -133,7 +134,8 @@ class AdvanceLoanRepaymentService:
         loan_id: uuid.UUID,
         payment_amount_rupees: Decimal,
         user_id: uuid.UUID,
-        tenant_id: uuid.UUID
+        tenant_id: uuid.UUID,
+        background_tasks: BackgroundTasks
     ) -> Tuple[bool, str, Optional[dict]]:
         try:
             # 1. Fetch and validate loan
@@ -179,21 +181,12 @@ class AdvanceLoanRepaymentService:
                 # Send failure email
                 user = await db.get(User, user_id)
                 if user:
-                    await EmailService.send_email(
+                    background_tasks.add_task(
+                        EmailService.send_advance_repayment_failure_email,
                         to_email=user.email,
-                        subject="Advance Loan Repayment Failed - Insufficient Funds",
-                        body=f"""Dear {user.full_name},
-
-Your advance loan repayment of ₹{payment_amount_rupees:,.2f} could not be processed due to insufficient funds.
-
-Current balance: ₹{account.balance / 100:,.2f}
-Required amount: ₹{payment_amount_rupees:,.2f}
-Shortfall: ₹{shortfall / 100:,.2f}
-
-Please ensure sufficient funds are available and try again.
-
-Best regards,
-FastBank Team"""
+                        user_name=user.full_name,
+                        payment_amount=float(payment_amount_rupees),
+                        account_balance=float(account.balance) / 100
                     )
                 
                 return (False, f"Insufficient funds. Required: ₹{payment_amount_rupees:,.2f}, Available: ₹{account.balance / 100:,.2f}", None)

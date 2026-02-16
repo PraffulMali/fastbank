@@ -1,6 +1,6 @@
 from typing import Annotated, Optional
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -183,14 +183,16 @@ async def make_advance_loan_repayment(
     loan_id: uuid.UUID,
     repayment_request: AdvanceLoanRepaymentRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_user)]
+    current_user: Annotated[User, Depends(require_user)],
+    background_tasks: BackgroundTasks
 ):
     success, message, details = await AdvanceLoanRepaymentService.process_advance_repayment(
         db=db,
         loan_id=loan_id,
         payment_amount_rupees=repayment_request.payment_amount,
         user_id=current_user.id,
-        tenant_id=current_user.tenant_id
+        tenant_id=current_user.tenant_id,
+        background_tasks=background_tasks
     )
     
     if not success:

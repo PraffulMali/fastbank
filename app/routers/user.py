@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.config.settings import settings
-from app.utils.email import send_verification_email
+from app.services.email_service import EmailService
 from app.models.user import User
 from app.models.enums import UserRole
 from app.schemas.user import (
@@ -38,10 +38,10 @@ async def create_user(
         
         # Send verification email asynchronously
         background_tasks.add_task(
-            send_verification_email, 
-            new_user.email, 
-            token, 
-            temp_password, 
+            EmailService.send_verification_email,
+            new_user.email,
+            token,
+            temp_password,
             str(new_user.id)
         )
         

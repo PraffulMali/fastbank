@@ -15,7 +15,7 @@ from app.schemas.auth import (
 )
 from app.services.user_service import UserService
 from app.dependencies import get_current_user, security
-from app.utils.email import send_password_reset_email, send_verification_resend_email
+from app.services.email_service import EmailService
 from fastapi.security import HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from app.config.settings import settings
@@ -139,7 +139,7 @@ async def forgot_password(
         user, reset_token = result
         # Send password reset email asynchronously
         background_tasks.add_task(
-            send_password_reset_email,
+            EmailService.send_password_reset_email,
             user.email,
             reset_token,
             str(user.id)
@@ -181,7 +181,7 @@ async def resend_verification(
         user, verification_token = result
         # Send verification email asynchronously
         background_tasks.add_task(
-            send_verification_resend_email,
+            EmailService.send_verification_resend_email,
             user.email,
             verification_token,
             str(user.id)
