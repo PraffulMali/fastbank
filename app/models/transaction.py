@@ -84,5 +84,10 @@ class Transaction(BaseModel):
         CheckConstraint("amount > 0", name="check_amount_positive"),
     )
     
+    @property
+    def account_number(self) -> str:
+        return self.account.account_number if self.account else None
+
+    
     def __repr__(self) -> str:
         return f"<Transaction(id={self.id}, type={self.transaction_type}, amount={self.amount})>"

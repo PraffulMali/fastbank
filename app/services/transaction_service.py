@@ -102,6 +102,7 @@ class TransactionService:
         debit_transaction = Transaction(
             tenant_id=source_account.tenant_id,
             account_id=source_account.id,
+            account=source_account,
             reference_id=reference_id,
             transaction_type=TransactionType.DEBIT,
             reference_type=ReferenceType.TRANSFER,
@@ -113,6 +114,7 @@ class TransactionService:
         credit_transaction = Transaction(
             tenant_id=dest_account.tenant_id,
             account_id=dest_account.id,
+            account=dest_account,
             reference_id=reference_id,
             transaction_type=TransactionType.CREDIT,
             reference_type=ReferenceType.TRANSFER,
@@ -180,6 +182,7 @@ class TransactionService:
         transaction = Transaction(
             tenant_id=account.tenant_id,
             account_id=account.id,
+            account=account,
             reference_id=reference_id,
             transaction_type=TransactionType.CREDIT,
             reference_type=ReferenceType.CASH,

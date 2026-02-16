@@ -1,4 +1,4 @@
-from typing import Annotated, Union
+from typing import Annotated
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,36 +48,13 @@ async def create_transfer(
             db, transfer_request, current_user
         )
         
-        # TODO: Trigger background task here to process the transfer
-        # The background task will:
-        # 1. Update transaction statuses to SUCCESS
-        # 2. Update account balances
-        # 3. Send WebSocket notification to both users
-        
+        # We return the data as a dictionary, and FastAPI will use TransferResponse 
+        # to validate and serialize it. Since TransactionResponse has from_attributes=True,
+        # it will correctly handle the ORM objects.
         return TransferResponse(
             reference_id=reference_id,
-            debit_transaction=TransactionResponse(
-                id=debit_txn.id,
-                account_id=debit_txn.account_id,
-                account_number=debit_txn.account.account_number,
-                transaction_type=debit_txn.transaction_type.value,
-                reference_type=debit_txn.reference_type.value,
-                amount=debit_txn.amount,
-                status=debit_txn.status.value,
-                created_at=debit_txn.created_at,
-                updated_at=debit_txn.updated_at
-            ),
-            credit_transaction=TransactionResponse(
-                id=credit_txn.id,
-                account_id=credit_txn.account_id,
-                account_number=credit_txn.account.account_number,
-                transaction_type=credit_txn.transaction_type.value,
-                reference_type=credit_txn.reference_type.value,
-                amount=credit_txn.amount,
-                status=credit_txn.status.value,
-                created_at=credit_txn.created_at,
-                updated_at=credit_txn.updated_at
-            )
+            debit_transaction=debit_txn,
+            credit_transaction=credit_txn
         )
     
     except ValueError as e:
@@ -111,17 +88,7 @@ async def create_deposit(
             db, deposit_request, current_user
         )
         
-        return TransactionResponse(
-            id=transaction.id,
-            account_id=transaction.account_id,
-            account_number=transaction.account.account_number,
-            transaction_type=transaction.transaction_type.value,
-            reference_type=transaction.reference_type.value,
-            amount=transaction.amount,
-            status=transaction.status.value,
-            created_at=transaction.created_at,
-            updated_at=transaction.updated_at
-        )
+        return transaction
     
     except ValueError as e:
         raise HTTPException(
