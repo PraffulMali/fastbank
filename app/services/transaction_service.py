@@ -1,5 +1,6 @@
 from typing import Optional, Tuple
 import uuid
+import logging
 from decimal import Decimal
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,14 +10,18 @@ import asyncio
 from app.models.transaction import Transaction
 from app.models.account import Account
 from app.models.user import User
-from app.models.enums import TransactionType, TransactionStatus, ReferenceType, UserRole
+from app.models.enums import TransactionType, TransactionStatus, ReferenceType, UserRole, NotificationType
 from app.schemas.transaction import (
     TransferRequest,
+    DepositRequest,
     TransactionDetailResponse,
     CounterpartyInfo
 )
 from app.utils.pagination import Paginator, Page
 from app.tasks.background_tasks import TransactionBackgroundTasks
+from app.services.notification_service import NotificationService
+
+logger = logging.getLogger(__name__)
 
 
 class TransactionService:
@@ -27,25 +32,6 @@ class TransactionService:
         transfer_request: TransferRequest,
         current_user: User
     ) -> Tuple[Transaction, Transaction, uuid.UUID]:
-        """
-        Initiate a transfer between two accounts.
-        Creates both DEBIT and CREDIT transactions atomically with PENDING status.
-        Triggers background task for processing.
-        
-        Steps:
-        1. Validate source account belongs to user
-        2. Validate source account has sufficient balance
-        3. Validate destination account exists and is active
-        4. Create both transactions with PENDING status (atomic)
-        5. Trigger background task to process transfer
-        6. Return both transactions and reference_id
-        
-        Background task will:
-        - Update balances atomically
-        - Update statuses to SUCCESS/FAILED
-        - Send WebSocket notifications
-        - Create persistent notifications
-        """
         # 1. Get source account
         source_query = select(Account).where(
             and_(
@@ -97,6 +83,7 @@ class TransactionService:
         debit_transaction = Transaction(
             tenant_id=source_account.tenant_id,
             account_id=source_account.id,
+            account=source_account,
             reference_id=reference_id,
             transaction_type=TransactionType.DEBIT,
             reference_type=ReferenceType.TRANSFER,
@@ -108,6 +95,7 @@ class TransactionService:
         credit_transaction = Transaction(
             tenant_id=dest_account.tenant_id,
             account_id=dest_account.id,
+            account=dest_account,
             reference_id=reference_id,
             transaction_type=TransactionType.CREDIT,
             reference_type=ReferenceType.TRANSFER,
@@ -133,11 +121,76 @@ class TransactionService:
     
     
     @staticmethod
+    async def deposit(
+        db: AsyncSession,
+        deposit_request: DepositRequest,
+        current_user: User
+    ) -> Transaction:
+        # 1. Get account
+        account_query = select(Account).where(
+            and_(
+                Account.id == deposit_request.account_id,
+                Account.is_active == True
+            )
+        )
+        account_result = await db.execute(account_query)
+        account = account_result.scalar_one_or_none()
+        
+        if not account:
+            raise ValueError("Account not found or inactive")
+        
+        # 2. Verify account belongs to current user
+        if account.user_id != current_user.id:
+            raise PermissionError("You can only deposit into your own accounts")
+        
+        # Convert amount to smallest unit (Paise)
+        amount_in_paise = int(deposit_request.amount * 100)
+        
+        # 3. Create CREDIT transaction
+        # For cash deposit, reference_id can be same as transaction ID or a new one
+        reference_id = uuid.uuid4()
+        
+        transaction = Transaction(
+            tenant_id=account.tenant_id,
+            account_id=account.id,
+            account=account,
+            reference_id=reference_id,
+            transaction_type=TransactionType.CREDIT,
+            reference_type=ReferenceType.CASH,
+            amount=amount_in_paise,
+            status=TransactionStatus.SUCCESS # Cash deposit is usually instant
+        )
+        
+        # 4. Update account balance
+        account.balance += amount_in_paise
+        
+        db.add(transaction)
+        await db.commit()
+        await db.refresh(transaction)
+        
+        # 5. Send notification
+        try:
+            await NotificationService.create_notification(
+                db=db,
+                tenant_id=transaction.tenant_id,
+                user_id=account.user_id,
+                notification_type=NotificationType.TRANSACTION_SUCCESS,
+                message=f"Successfully deposited ₹{deposit_request.amount} into account {account.account_number}. New balance: ₹{account.balance / 100}",
+                reference_id=transaction.id,
+                reference_type="transaction"
+            )
+        except Exception as e:
+            # Don't fail the transaction if notification fails
+            logger.error(f"Failed to send notification for deposit: {e}")
+            
+        return transaction
+    
+    
+    @staticmethod
     async def get_transaction_by_id(
         db: AsyncSession,
         transaction_id: uuid.UUID
     ) -> Optional[Transaction]:
-        """Get transaction by ID with related account and user data"""
         return await db.get(Transaction, transaction_id)
     
     
@@ -146,10 +199,6 @@ class TransactionService:
         db: AsyncSession,
         transaction_id: uuid.UUID
     ) -> Optional[TransactionDetailResponse]:
-        """
-        Get transaction details with counterparty information.
-        For TRANSFER type transactions, finds the linked transaction and extracts counterparty info.
-        """
         # Get the transaction
         transaction = await db.get(Transaction, transaction_id)
         if not transaction:
@@ -210,10 +259,6 @@ class TransactionService:
     
     @staticmethod
     def get_user_transactions_query(user: User):
-        """
-        Get base query for user's transactions.
-        Returns transactions from all accounts owned by the user (active accounts only).
-        """
         # Get all active account IDs for this user
         account_ids_subquery = (
             select(Account.id)
@@ -233,10 +278,6 @@ class TransactionService:
     
     @staticmethod
     def get_tenant_transactions_query(tenant_id: uuid.UUID):
-        """
-        Get base query for all transactions in a tenant.
-        Used by ADMIN to see all transactions (including from inactive accounts).
-        """
         return select(Transaction).where(
             Transaction.tenant_id == tenant_id
         ).order_by(Transaction.created_at.desc())
@@ -248,16 +289,9 @@ class TransactionService:
         current_user: User,
         paginator: Paginator
     ) -> Page:
-        """
-        List transactions based on user role:
-        - USER: See only their account transactions (active accounts)
-        - ADMIN: See all transactions in their tenant (including inactive accounts)
-        """
         if current_user.role == UserRole.USER:
             query = TransactionService.get_user_transactions_query(current_user)
         elif current_user.role == UserRole.ADMIN:
-            if not current_user.tenant_id:
-                raise ValueError("Admin must belong to a tenant")
             query = TransactionService.get_tenant_transactions_query(current_user.tenant_id)
         else:
             raise PermissionError("Invalid role for transaction access")
@@ -301,11 +335,6 @@ class TransactionService:
         transaction_id: uuid.UUID,
         current_user: User
     ) -> Transaction:
-        """
-        Verify user has permission to view this transaction.
-        - USER: Can view only their account's transactions
-        - ADMIN: Can view any transaction in their tenant
-        """
         transaction = await db.get(Transaction, transaction_id)
         if not transaction:
             raise ValueError("Transaction not found")

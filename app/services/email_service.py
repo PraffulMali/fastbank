@@ -13,7 +13,6 @@
 #     """
 #     Service for sending emails.
 #     Currently logs emails instead of sending them.
-#     TODO: Integrate with actual email service (SendGrid, AWS SES, etc.)
 #     """
     
 #     @staticmethod
@@ -36,7 +35,6 @@
 #             True if email was sent successfully, False otherwise
 #         """
 #         try:
-#             # TODO: Replace with actual email sending logic
 #             logger.info(f"[EMAIL] To: {to_email}")
 #             logger.info(f"[EMAIL] Subject: {subject}")
 #             logger.info(f"[EMAIL] Body: {body}")
@@ -90,10 +88,6 @@
 #         return await EmailService.send_email(to_email, subject, body)
 
 
-"""
-Email Service for sending emails to users.
-Logs emails if SMTP is not configured.
-"""
 
 import logging
 from typing import Optional
@@ -106,10 +100,6 @@ logger = logging.getLogger(__name__)
 
 
 class EmailService:
-    """
-    Service for sending emails.
-    Uses SMTP if configured, otherwise logs emails.
-    """
 
     @staticmethod
     async def send_email(
@@ -118,9 +108,6 @@ class EmailService:
         body: str,
         html_body: Optional[str] = None
     ) -> bool:
-        """
-        Send an email to a user.
-        """
 
         try:
             message = EmailMessage()
@@ -170,9 +157,6 @@ class EmailService:
         account_balance: float,
         due_date: str
     ) -> bool:
-        """
-        Send EMI payment failure notification email.
-        """
 
         subject = "EMI Payment Failed - Insufficient Funds"
 

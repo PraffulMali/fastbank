@@ -6,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class InterestRuleCreate(BaseModel):
-    """Schema for creating interest rule (ADMIN only)"""
     rule_type: str = Field(..., description="ACCOUNT or LOAN")
     
     # For ACCOUNT rules
@@ -29,7 +28,6 @@ class InterestRuleCreate(BaseModel):
     
     @model_validator(mode='after')
     def validate_rule_constraints(self):
-        """Validate that fields match rule_type requirements"""
         if self.rule_type == "LOAN":
             # LOAN rules require loan_type_id
             if not self.loan_type_id:
@@ -62,12 +60,10 @@ class InterestRuleCreate(BaseModel):
 
 
 class InterestRuleUpdate(BaseModel):
-    """Schema for updating interest rule - only interest_rate can be updated"""
     interest_rate: Decimal = Field(..., ge=0, le=100, decimal_places=2)
 
 
 class InterestRuleResponse(BaseModel):
-    """Schema for interest rule response"""
     id: uuid.UUID
     tenant_id: uuid.UUID
     rule_type: str
@@ -84,7 +80,6 @@ class InterestRuleResponse(BaseModel):
     
     @field_validator("min_balance", "max_balance", mode="before")
     def convert_paise_to_rupees(cls, v):
-        """Convert paise to rupees for display"""
         if v is None:
             return None
         if isinstance(v, (int, Decimal)):
@@ -93,7 +88,6 @@ class InterestRuleResponse(BaseModel):
 
 
 class InterestRuleDetailResponse(BaseModel):
-    """Schema for detailed interest rule with related info"""
     id: uuid.UUID
     tenant_id: uuid.UUID
     rule_type: str

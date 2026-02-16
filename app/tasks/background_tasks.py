@@ -17,34 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 class TransactionBackgroundTasks:
-    """
-    Background tasks for processing transactions.
-    
-    Features:
-    - Atomic balance updates
-    - Status tracking (PENDING → SUCCESS/FAILED)
-    - WebSocket notifications
-    - Persistent notifications
-    - Error handling and rollback
-    """
     
     @staticmethod
     async def process_transfer(reference_id: uuid.UUID):
-        """
-        Background task to process a pending transfer.
-        
-        Steps:
-        1. Fetch both transactions by reference_id
-        2. Verify both are PENDING
-        3. Atomically update balances
-        4. Update both statuses to SUCCESS
-        5. Send notifications to both users
-        
-        In case of error:
-        - Update both statuses to FAILED
-        - Send failure notifications
-        - No balance changes
-        """
         async with AsyncSessionLocal() as db:
             try:
                 # Simulate processing delay
@@ -179,9 +154,6 @@ class TransactionBackgroundTasks:
         credit_txn: Transaction,
         reason: str
     ):
-        """
-        Mark both transactions as FAILED and send notifications.
-        """
         debit_txn.status = TransactionStatus.FAILED
         credit_txn.status = TransactionStatus.FAILED
         
@@ -214,10 +186,6 @@ class TransactionBackgroundTasks:
         debit_account: Account,
         credit_account: Account
     ):
-        """
-        Send success notifications to both sender and receiver.
-        Also send admin notification for high-value transactions.
-        """
         # Notification to sender (debit)
         try:
             await NotificationService.create_notification(

@@ -6,7 +6,6 @@ from app.database import get_db
 from app.schemas.auth import (
     UserLoginRequest, 
     UserLoginResponse, 
-    ChangePasswordRequest,
     TokenRefreshRequest,
     TokenRefreshResponse,
     UserLogoutRequest,
@@ -30,9 +29,6 @@ async def login(
     login_data: UserLoginRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Login endpoint - returns access and refresh tokens
-    """
     try:
         result = await UserService.login_user(db, login_data)
         return result
@@ -49,34 +45,6 @@ async def login(
         )
 
 
-@router.post("/change-password", status_code=status.HTTP_200_OK)
-async def change_password(
-    password_data: ChangePasswordRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    """
-    Change password endpoint - requires valid access token
-    User provides old password, new password, and confirm password
-    """
-    try:
-        await UserService.change_password(
-            db,
-            current_user.id,
-            password_data.old_password,
-            password_data.new_password
-        )
-        return {"message": "Password changed successfully"}
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to change password"
-        )
 
 
 @router.post("/refresh", response_model=TokenRefreshResponse, status_code=status.HTTP_200_OK)
@@ -85,10 +53,6 @@ async def refresh_token(
     db: AsyncSession = Depends(get_db),
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None
 ):
-    """
-    Refresh token endpoint - exchanges refresh token for new access and refresh tokens
-    Also blacklists the old refresh token and the old access token (if provided)
-    """
     try:
         access_token_jti = None
         access_token_exp = None
@@ -134,10 +98,6 @@ async def logout(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Logout endpoint - invalidates the current access token and the provided refresh token
-    Requires valid access token in Authorization header and refresh token in request body
-    """
     try:
         # Blacklist access token
         await UserService.blacklist_token(credentials.credentials)
@@ -158,9 +118,6 @@ async def verify_email(
     token: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Email verification endpoint
-    """
     success = await UserService.verify_user_email(db, token)
     if not success:
         raise HTTPException(
@@ -176,10 +133,6 @@ async def forgot_password(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Forgot password endpoint - sends password reset email if user is active and email is verified.
-    Always returns success to avoid revealing if user exists.
-    """
     result = await UserService.request_password_reset(db, request_data.email)
     
     if result:
@@ -198,16 +151,12 @@ async def forgot_password(
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
 async def reset_password(
-    token: str,
     reset_data: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Reset password endpoint - uses token from email (query param) to reset password
-    """
     success = await UserService.reset_password_with_token(
         db,
-        token,
+        reset_data.token,
         reset_data.new_password
     )
     
@@ -226,10 +175,6 @@ async def resend_verification(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Resend verification email endpoint - sends new verification email if user exists and email is not verified.
-    Always returns success to avoid revealing if user exists.
-    """
     result = await UserService.resend_verification_email(db, request_data.email)
     
     if result:

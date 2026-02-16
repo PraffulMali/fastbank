@@ -1,4 +1,4 @@
-from typing import Annotated, Union
+from typing import Annotated
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,12 +8,13 @@ from app.models.user import User
 from app.models.enums import UserRole
 from app.schemas.transaction import (
     TransferRequest,
+    DepositRequest,
     TransferResponse,
     TransactionResponse,
     TransactionDetailResponse
 )
 from app.services.transaction_service import TransactionService
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_user, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(
@@ -26,65 +27,46 @@ router = APIRouter(
 async def create_transfer(
     transfer_request: TransferRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_user)]
 ):
-    """
-    Initiate a transfer between accounts (USER only).
-    
-    - USER: Can transfer from their own accounts to any other account
-    - Creates both DEBIT and CREDIT transactions with PENDING status
-    - Background task will process and update status to SUCCESS/FAILED
-    - ADMIN and SUPER_ADMIN cannot use this endpoint
-    
-    Validations:
-    - Source account must belong to current user
-    - Source account must have sufficient balance
-    - Destination account must exist and be active
-    - Cannot transfer to the same account
-    """
-    # Only USER role can initiate transfers
-    if current_user.role != UserRole.USER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only regular users can initiate transfers"
-        )
-    
     try:
         debit_txn, credit_txn, reference_id = await TransactionService.initiate_transfer(
             db, transfer_request, current_user
         )
         
-        # TODO: Trigger background task here to process the transfer
-        # The background task will:
-        # 1. Update transaction statuses to SUCCESS
-        # 2. Update account balances
-        # 3. Send WebSocket notification to both users
-        
+        # We return the data as a dictionary, and FastAPI will use TransferResponse 
+        # to validate and serialize it. Since TransactionResponse has from_attributes=True,
+        # it will correctly handle the ORM objects.
         return TransferResponse(
             reference_id=reference_id,
-            debit_transaction=TransactionResponse(
-                id=debit_txn.id,
-                account_id=debit_txn.account_id,
-                account_number=debit_txn.account.account_number,
-                transaction_type=debit_txn.transaction_type.value,
-                reference_type=debit_txn.reference_type.value,
-                amount=debit_txn.amount,
-                status=debit_txn.status.value,
-                created_at=debit_txn.created_at,
-                updated_at=debit_txn.updated_at
-            ),
-            credit_transaction=TransactionResponse(
-                id=credit_txn.id,
-                account_id=credit_txn.account_id,
-                account_number=credit_txn.account.account_number,
-                transaction_type=credit_txn.transaction_type.value,
-                reference_type=credit_txn.reference_type.value,
-                amount=credit_txn.amount,
-                status=credit_txn.status.value,
-                created_at=credit_txn.created_at,
-                updated_at=credit_txn.updated_at
-            )
+            debit_transaction=debit_txn,
+            credit_transaction=credit_txn
         )
+    
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+
+
+@router.post("/deposit", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
+async def create_deposit(
+    deposit_request: DepositRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_user)]
+):
+    try:
+        transaction = await TransactionService.deposit(
+            db, deposit_request, current_user
+        )
+        
+        return transaction
     
     except ValueError as e:
         raise HTTPException(
@@ -101,22 +83,10 @@ async def create_transfer(
 @router.get("/", response_model=Page[TransactionResponse])
 async def list_transactions(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends()
 ):
-    """
-    List transactions based on user role.
-    
-    - USER: See only their own account transactions (from active accounts)
-    - ADMIN: See all transactions in their tenant (including inactive accounts)
-    - SUPER_ADMIN: Cannot access this endpoint
-    """
-    # SUPER_ADMIN cannot access transactions
-    if current_user.role == UserRole.SUPER_ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="SUPER_ADMIN cannot access transaction operations"
-        )
+
     
     try:
         return await TransactionService.list_transactions(db, current_user, paginator)
@@ -136,26 +106,9 @@ async def list_transactions(
 async def get_transaction(
     transaction_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_tenant_member)]
 ):
-    """
-    Get detailed transaction information with counterparty details.
-    
-    - USER: Can view their own account transactions
-    - ADMIN: Can view any transaction in their tenant
-    - SUPER_ADMIN: Cannot access this endpoint
-    
-    For TRANSFER transactions, includes counterparty information:
-    - Counterparty tenant_id
-    - Counterparty account_number
-    - Counterparty user_name
-    """
-    # SUPER_ADMIN cannot access transactions
-    if current_user.role == UserRole.SUPER_ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="SUPER_ADMIN cannot access transaction operations"
-        )
+
     
     try:
         # Verify access permissions

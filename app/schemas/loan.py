@@ -6,10 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class LoanCreate(BaseModel):
-    """
-    Schema for USER creating a loan application.
-    Interest rate is fetched from INTEREST_RULES based on loan_type_id.
-    """
     account_id: uuid.UUID = Field(..., description="Account to receive loan amount")
     loan_type_id: uuid.UUID = Field(..., description="Type of loan (e.g., Personal, Home, Education)")
     principal_amount: Decimal = Field(..., gt=0, decimal_places=2, description="Loan amount requested")
@@ -33,9 +29,6 @@ class LoanCreate(BaseModel):
 
 
 class LoanApprovalDecision(BaseModel):
-    """
-    Schema for ADMIN approving/rejecting loan.
-    """
     decision: str = Field(..., description="APPROVED or REJECTED")
     rejection_reason: Optional[str] = Field(None, max_length=500)
     
@@ -54,10 +47,6 @@ class LoanApprovalDecision(BaseModel):
 
 
 class LoanResponse(BaseModel):
-    """
-    Schema for loan response (ADMIN view).
-    Full details including admin fields and loan purpose.
-    """
     id: uuid.UUID
     tenant_id: uuid.UUID
     user_id: uuid.UUID
@@ -89,10 +78,6 @@ class LoanResponse(BaseModel):
 
 
 class LoanUserResponse(BaseModel):
-    """
-    Schema for loan response (USER view).
-    Limited fields - no admin metadata.
-    """
     id: uuid.UUID
     account_id: uuid.UUID
     loan_type_id: uuid.UUID
@@ -117,9 +102,6 @@ class LoanUserResponse(BaseModel):
 
 
 class AdvanceLoanRepaymentRequest(BaseModel):
-    """
-    Schema for borrower making an advance loan repayment.
-    """
     payment_amount: Decimal = Field(
         ..., 
         gt=0, 
@@ -137,9 +119,6 @@ class AdvanceLoanRepaymentRequest(BaseModel):
 
 
 class AdvanceLoanRepaymentResponse(BaseModel):
-    """
-    Schema for advance loan repayment response.
-    """
     success: bool
     message: str
     payment_amount: Optional[Decimal] = None

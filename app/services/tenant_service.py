@@ -36,10 +36,13 @@ class TenantService:
         personal_loan = LoanType(tenant_id=new_tenant.id, name="PERSONAL")
         vehicle_loan = LoanType(tenant_id=new_tenant.id, name="VEHICLE")
         db.add_all([personal_loan, vehicle_loan])
+        await db.flush() # Flush to get LoanType IDs
         
-        # Create default Interest Rule for SAVINGS account (4%)
-        # rule_type=ACCOUNT, min_balance=0, max_balance=None (unlimited), interest_rate=4.0
-        default_interest = InterestRule(
+        # Create default Interest Rules
+        rules = []
+        
+        # 1. SAVINGS account (4%)
+        rules.append(InterestRule(
             tenant_id=new_tenant.id,
             rule_type=RuleType.ACCOUNT,
             account_type_id=savings_type.id,
@@ -47,8 +50,27 @@ class TenantService:
             max_balance=None,
             interest_rate=4.0,
             is_active=True
-        )
-        db.add(default_interest)
+        ))
+        
+        # 2. PERSONAL loan (12%)
+        rules.append(InterestRule(
+            tenant_id=new_tenant.id,
+            rule_type=RuleType.LOAN,
+            loan_type_id=personal_loan.id,
+            interest_rate=12.0,
+            is_active=True
+        ))
+        
+        # 3. VEHICLE loan (10%)
+        rules.append(InterestRule(
+            tenant_id=new_tenant.id,
+            rule_type=RuleType.LOAN,
+            loan_type_id=vehicle_loan.id,
+            interest_rate=10.0,
+            is_active=True
+        ))
+        
+        db.add_all(rules)
 
         await db.commit()
         await db.refresh(new_tenant)
@@ -60,7 +82,6 @@ class TenantService:
 
     @staticmethod
     def get_tenants_query():
-        """Get base query for listing tenants"""
         return select(Tenant)
 
     @staticmethod
@@ -68,7 +89,6 @@ class TenantService:
         db: AsyncSession,
         paginator: Paginator
     ) -> Page:
-        """List tenants with pagination, centralizing query construction in service layer"""
         query = TenantService.get_tenants_query()
         return await paginator.paginate(db, query)
 

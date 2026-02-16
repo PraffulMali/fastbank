@@ -13,7 +13,7 @@ from app.schemas.account import (
     AccountUserResponse
 )
 from app.services.account_service import AccountService
-from app.dependencies import get_current_user, require_tenant_admin  # Import from dependencies
+from app.dependencies import get_current_user, require_tenant_admin, require_user  # Import from dependencies
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(
@@ -28,12 +28,6 @@ async def create_account(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Create an account for a user (ADMIN only).
-    - ADMIN: Can create accounts for users in their tenant
-    - Requires: user_id and account_type in body
-    - SUPER_ADMIN: Cannot access this endpoint
-    """
     try:
         account = await AccountService.create_account(
             db,
@@ -55,25 +49,14 @@ async def list_accounts(
     current_user: Annotated[User, Depends(require_tenant_admin)],
     paginator: Paginator = Depends()
 ):
-    """
-    List all accounts in the tenant (ADMIN only).
-    - ADMIN: Can list all accounts in their tenant
-    - SUPER_ADMIN: Cannot access this endpoint
-    """
     return await AccountService.list_accounts(db, current_user.tenant_id, paginator)
 
 
 @router.get("/me", response_model=AccountUserResponse)
 async def get_my_accounts(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(require_user)]
 ):
-    """
-    Get all accounts for the current user (USER only).
-    - USER: Can view their own accounts (without is_active and deleted_at)
-    - ADMIN: Cannot access this endpoint (admins don't have accounts)
-    - SUPER_ADMIN: Cannot access this endpoint
-    """
     try:
         return await AccountService.get_my_accounts(db, current_user)
     except PermissionError as e:
@@ -89,11 +72,6 @@ async def get_account(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Get specific account details (ADMIN only).
-    - ADMIN: Can view any account in their tenant
-    - SUPER_ADMIN: Cannot access this endpoint
-    """
     try:
         return await AccountService.get_account_with_permissions(
             db, account_id, current_user.tenant_id
@@ -117,12 +95,6 @@ async def update_account(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Update account - only to reactivate account (ADMIN only).
-    - ADMIN: Can reactivate accounts in their tenant
-    - Only is_active can be updated (to restore deleted accounts)
-    - SUPER_ADMIN: Cannot access this endpoint
-    """
     try:
         return await AccountService.update_account_with_permissions(
             db, account_id, account_update, current_user.tenant_id
@@ -150,12 +122,6 @@ async def delete_account(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)]
 ):
-    """
-    Soft delete an account (ADMIN only).
-    - ADMIN: Can delete accounts in their tenant
-    - Sets is_active to False and deleted_at to current timestamp
-    - SUPER_ADMIN: Cannot access this endpoint
-    """
     try:
         await AccountService.soft_delete_account_with_permissions(
             db, account_id, current_user.tenant_id

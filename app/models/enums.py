@@ -4,13 +4,10 @@ from enum import Enum
 class UserRole(str, Enum):
     SUPER_ADMIN = "SUPER_ADMIN" 
     ADMIN = "ADMIN"             
-    STAFF = "STAFF"              
     USER = "USER"
 
 
-class AccountType(str, Enum):
-    SAVINGS = "SAVINGS"
-    CURRENT = "CURRENT"
+
 
 
 class TransactionType(str, Enum):
@@ -28,6 +25,7 @@ class ReferenceType(str, Enum):
     TRANSFER = "TRANSFER"  
     LOAN = "LOAN"          
     SYSTEM = "SYSTEM"
+    CASH = "CASH"
 
 
 class NotificationType(str, Enum):
@@ -44,8 +42,8 @@ class LoanStatus(str, Enum):
     APPLIED = "APPLIED"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
-    CLOSED = "CLOSED"  # Loan fully repaid through normal EMI schedule
-    FORECLOSED = "FORECLOSED"  # Loan closed early through advance payment
+    CLOSED = "CLOSED"  
+    FORECLOSED = "FORECLOSED" 
 
 class RuleType(str, Enum):
     ACCOUNT = "ACCOUNT"

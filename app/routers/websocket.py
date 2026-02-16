@@ -16,10 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 async def get_user_from_token(token: str, db: AsyncSession) -> User:
-    """
-    Validate WebSocket token and get user.
-    Similar to get_current_user but for WebSocket connections.
-    """
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id_str: str = payload.get("sub")
@@ -53,44 +49,6 @@ async def websocket_endpoint(
     token: str = Query(..., description="JWT access token for authentication"),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    WebSocket endpoint for real-time notifications.
-    
-    Usage:
-    - Connect with: ws://localhost:8000/ws?token=<access_token>
-    - Receives real-time notifications
-    - Sends heartbeat every 30 seconds
-    
-    Message Format (from server):
-    {
-        "type": "notification",
-        "data": {
-            "id": "uuid",
-            "notification_type": "TRANSACTION_SUCCESS",
-            "message": "...",
-            "reference_id": "uuid",
-            "reference_type": "transaction",
-            "is_read": false,
-            "created_at": "2024-01-01T00:00:00"
-        }
-    }
-    
-    Or for status updates:
-    {
-        "type": "transaction_status",
-        "data": {
-            "transaction_id": "uuid",
-            "status": "SUCCESS",
-            "message": "Transaction completed successfully"
-        }
-    }
-    
-    Or heartbeat:
-    {
-        "type": "heartbeat",
-        "timestamp": "2024-01-01T00:00:00"
-    }
-    """
     user = None
     manager = get_websocket_manager()
     

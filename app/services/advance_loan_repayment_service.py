@@ -1,8 +1,3 @@
-"""
-Advance Loan Repayment Service
-Handles borrower-initiated advance loan repayments with interest calculation,
-principal allocation, tenure recalculation, and foreclosure logic.
-"""
 from typing import Tuple, Optional
 import uuid
 from datetime import datetime, timezone
@@ -59,17 +54,6 @@ class AdvanceLoanRepaymentService:
         remaining_principal: int,
         annual_interest_rate: Decimal
     ) -> Tuple[int, int, int]:
-        """
-        Allocate payment amount to interest first, then principal.
-        
-        Args:
-            payment_amount: Total payment amount in paisa
-            remaining_principal: Current remaining principal in paisa
-            annual_interest_rate: Annual interest rate
-            
-        Returns:
-            Tuple of (interest_component, principal_component, remaining_after_payment)
-        """
         # Calculate accrued interest
         interest_component = AdvanceLoanRepaymentService.calculate_accrued_interest(
             remaining_principal, annual_interest_rate
@@ -151,34 +135,6 @@ class AdvanceLoanRepaymentService:
         user_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> Tuple[bool, str, Optional[dict]]:
-        """
-        Process an advance loan repayment.
-        
-        Flow:
-        1. Validate loan eligibility (APPROVED status, remaining principal > 0)
-        2. Convert payment amount to paisa
-        3. Check account balance
-        4. Calculate accrued interest
-        5. Allocate payment: interest first, then principal
-        6. Determine if foreclosure (full payoff)
-        7. If not foreclosure, recalculate tenure
-        8. Atomically:
-           - Create DEBIT transaction
-           - Update account balance
-           - Update loan (remaining_principal, tenure, status)
-           - Create repayment record
-        9. Send notifications
-        
-        Args:
-            db: Database session
-            loan_id: Loan ID
-            payment_amount_rupees: Payment amount in rupees
-            user_id: User making the payment
-            tenant_id: Tenant ID
-            
-        Returns:
-            Tuple of (success: bool, message: str, details: Optional[dict])
-        """
         try:
             # 1. Fetch and validate loan
             loan = await db.get(Loan, loan_id)
@@ -324,7 +280,7 @@ FastBank Team"""
             
             # 9. Send success notification
             if is_foreclosure:
-                message = f"🎉 Congratulations! Your loan has been fully repaid. Payment of ₹{payment_amount_rupees:,.2f} (Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}) has been processed. Your loan is now FORECLOSED."
+                message = f"Congratulations! Your loan has been fully repaid. Payment of ₹{payment_amount_rupees:,.2f} (Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}) has been processed. Your loan is now FORECLOSED."
             else:
                 message = f"Advance repayment of ₹{payment_amount_rupees:,.2f} processed successfully. Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}. Remaining principal: ₹{remaining_after / 100:,.2f}. New tenure: {new_tenure} months."
             

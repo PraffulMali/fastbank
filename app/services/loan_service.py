@@ -64,19 +64,6 @@ class LoanService:
         user_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> Loan:
-        """
-        Create a new loan application by USER.
-        
-        Flow:
-        1. Validates account ownership and status
-        2. Validates loan_type_id belongs to tenant
-        3. Fetches applicable interest rate from INTEREST_RULES based on loan_type_id
-        4. Stores interest rate as snapshot in loan record (for contract integrity)
-        5. Calculates EMI based on principal, interest rate, and tenure
-        6. Initializes loan with status=APPLIED, remaining_principal=principal_amount
-        7. Sends notification to USER confirming application
-        8. Sends notification to all ADMINs about new loan application
-        """
         # Validate principal amount limits
         if loan_in.principal_amount < MIN_LOAN_AMOUNT:
             raise ValueError(f"Loan amount must be at least ₹{MIN_LOAN_AMOUNT:,.2f}")
@@ -224,25 +211,6 @@ class LoanService:
         admin_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> Loan:
-        """
-        Approve or reject a loan application by ADMIN.
-        
-        On APPROVAL:
-        - All operations are atomic within a single database transaction
-        - Updates loan status to APPROVED
-        - Records decision metadata (decided_by, decided_at)
-        - Creates CREDIT transaction for disbursement
-        - Updates account balance
-        - Sends notifications to user
-        
-        On REJECTION:
-        - Updates loan status to REJECTED
-        - Stores rejection_reason
-        - Records decision metadata
-        - Sends notification to user
-        
-        Critical: All database operations are atomic - either all succeed or all rollback
-        """
         loan = await db.get(Loan, loan_id)
         if not loan:
             raise ValueError("Loan not found")
@@ -356,7 +324,6 @@ class LoanService:
         db: AsyncSession,
         loan_id: uuid.UUID
     ) -> Optional[Loan]:
-        """Get loan by ID"""
         return await db.get(Loan, loan_id)
     
     @staticmethod
@@ -366,7 +333,6 @@ class LoanService:
         tenant_id: uuid.UUID,
         include_inactive: bool = False
     ) -> List[Loan]:
-        """List all loans for a specific user"""
         query = select(Loan).where(
             and_(
                 Loan.user_id == user_id,
@@ -388,10 +354,6 @@ class LoanService:
         tenant_id: uuid.UUID,
         status: Optional[LoanStatus] = None
     ) -> List[Loan]:
-        """
-        List all loans in tenant (for ADMIN).
-        Optionally filter by status.
-        """
         query = select(Loan).where(Loan.tenant_id == tenant_id)
         
         if status:
@@ -407,10 +369,6 @@ class LoanService:
         db: AsyncSession,
         loan_id: uuid.UUID
     ) -> Optional[Loan]:
-        """
-        Soft delete a loan (ADMIN only).
-        Only APPLIED or REJECTED loans can be deleted.
-        """
         loan = await db.get(Loan, loan_id)
         if not loan:
             return None

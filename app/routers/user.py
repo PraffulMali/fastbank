@@ -14,7 +14,8 @@ from app.schemas.user import (
     UserUpdate,
     UserListResponse,
     UserDetailResponse,
-    UserSelfResponse
+    UserSelfResponse,
+    ChangePasswordRequest
 )
 from app.services.user_service import UserService
 from app.dependencies import get_current_user, require_super_admin, require_admin
@@ -32,11 +33,6 @@ async def create_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_admin)]
 ):
-    """
-    Create a new user.
-    - SUPER_ADMIN: Can create ADMIN users for any tenant
-    - ADMIN: Can create USER users within their own tenant
-    """
     try:
         new_user, token, temp_password = await UserService.create_user(db, user_in, current_user)
         
@@ -63,11 +59,6 @@ async def list_users(
     current_user: Annotated[User, Depends(require_admin)],
     paginator: Paginator = Depends()
 ):
-    """
-    List users based on role:
-    - SUPER_ADMIN: Lists all ADMIN users across all tenants
-    - ADMIN: Lists all users within their own tenant
-    """
     return await UserService.list_users(db, current_user, paginator)
 
 
@@ -77,12 +68,6 @@ async def get_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """
-    Retrieve user details:
-    - SUPER_ADMIN: Can view any ADMIN user
-    - ADMIN: Can view any user in their tenant
-    - USER: Can only view their own profile (limited fields)
-    """
     try:
         return await UserService.get_user_with_permissions(db, user_id, current_user)
     except ValueError as e:
@@ -104,11 +89,6 @@ async def update_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_admin)]
 ):
-    """
-    Update user details.
-    - SUPER_ADMIN: Can update any ADMIN user
-    - ADMIN: Can update any user in their tenant
-    """
     try:
         updated_user = await UserService.update_user_with_permissions(
             db, user_id, user_update, current_user
@@ -137,11 +117,6 @@ async def delete_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_admin)]
 ):
-    """
-    Soft delete a user.
-    - SUPER_ADMIN: Can delete any ADMIN user
-    - ADMIN: Can delete any user in their tenant
-    """
     try:
         await UserService.soft_delete_user_with_permissions(db, user_id, current_user)
     except ValueError as e:
@@ -158,4 +133,30 @@ async def delete_user(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+async def change_password(
+    password_data: ChangePasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    try:
+        await UserService.change_password(
+            db,
+            current_user.id,
+            password_data.old_password,
+            password_data.new_password
+        )
+        return {"message": "Password changed successfully"}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to change password"
         )

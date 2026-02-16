@@ -25,11 +25,6 @@ class InterestRuleService:
         rule_in: InterestRuleCreate,
         tenant_id: uuid.UUID
     ) -> InterestRule:
-        """
-        Create a new interest rule.
-        Validation already done in schema.
-        Additional validation: verify that account_type/loan_type exists and belongs to tenant.
-        """
         # Verify account_type or loan_type exists and belongs to tenant
         if rule_in.rule_type == "ACCOUNT":
             account_type = await db.get(AccountType, rule_in.account_type_id)
@@ -126,7 +121,6 @@ class InterestRuleService:
         db: AsyncSession,
         rule_id: uuid.UUID
     ) -> Optional[InterestRule]:
-        """Get interest rule by ID"""
         return await db.get(InterestRule, rule_id)
     
     @staticmethod
@@ -135,9 +129,6 @@ class InterestRuleService:
         tenant_id: uuid.UUID,
         paginator: Paginator
     ) -> Page:
-        """
-        List interest rules without filters.
-        """
         query = select(InterestRule).where(InterestRule.tenant_id == tenant_id)
         
         query = query.order_by(InterestRule.created_at.desc())
@@ -151,9 +142,6 @@ class InterestRuleService:
         rule_update: InterestRuleUpdate,
         tenant_id: uuid.UUID
     ) -> Optional[InterestRule]:
-        """
-        Update interest rule - only interest_rate can be updated.
-        """
         rule = await db.get(InterestRule, rule_id)
         if not rule:
             return None
@@ -175,10 +163,6 @@ class InterestRuleService:
         rule_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> None:
-        """
-        Hard delete an interest rule.
-        No protection needed since rules are configuration, not transactional data.
-        """
         rule = await db.get(InterestRule, rule_id)
         if not rule:
             raise ValueError("Interest rule not found")
@@ -197,9 +181,6 @@ class InterestRuleService:
         rule_id: uuid.UUID,
         tenant_id: uuid.UUID
     ) -> Optional[dict]:
-        """
-        Get interest rule with related account type or loan type name.
-        """
         rule = await db.get(InterestRule, rule_id)
         if not rule or rule.tenant_id != tenant_id:
             return None
@@ -233,9 +214,6 @@ class InterestRuleService:
     
     @staticmethod
     async def process_monthly_interest_accrual(db: AsyncSession) -> dict:
-        """
-        Process monthly interest accrual for all accounts with active interest rules.
-        """
         stats = {
             "processed": 0, 
             "success": 0, 

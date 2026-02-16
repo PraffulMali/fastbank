@@ -5,9 +5,6 @@ from app.database.redis import get_redis
 from app.utils.security import hash_token
 
 async def send_verification_email(email: str, token: str, temp_password: str, user_id: str):
-    """
-    Store verification token in Redis and send email with temporary password and verification link.
-    """
     # 1. Store hashed token in Redis with 15 minutes TTL
     hashed_token = hash_token(token)
     redis = await get_redis()
@@ -64,9 +61,6 @@ async def send_verification_email(email: str, token: str, temp_password: str, us
 
 
 async def send_password_reset_email(email: str, token: str, user_id: str):
-    """
-    Store password reset token in Redis and send email with reset link.
-    """
     # 1. Store hashed token in Redis with 15 minutes TTL
     hashed_token = hash_token(token)
     redis = await get_redis()
@@ -121,9 +115,6 @@ async def send_password_reset_email(email: str, token: str, user_id: str):
 
 
 async def send_verification_resend_email(email: str, token: str, user_id: str):
-    """
-    Store verification token in Redis and send verification email (for resend).
-    """
     # 1. Store hashed token in Redis with 15 minutes TTL
     hashed_token = hash_token(token)
     redis = await get_redis()
