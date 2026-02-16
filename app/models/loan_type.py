@@ -34,5 +34,11 @@ class LoanType(BaseModel):
         lazy="selectin"
     )
 
+    loans: Mapped[list["Loan"]] = relationship(
+        "Loan",
+        back_populates="loan_type",
+        lazy="selectin"
+    )
+    
     def __repr__(self) -> str:
         return f"<LoanType(id={self.id}, name={self.name})>"

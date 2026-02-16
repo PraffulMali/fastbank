@@ -12,6 +12,7 @@ from app.utils.pagination import Paginator, Page
 
 from app.models.user import User
 from app.models.tenant import Tenant
+from app.models.account_type import AccountType
 from app.models.user_identity import UserIdentity
 from app.models.enums import UserRole
 from app.schemas.user import (
@@ -283,10 +284,24 @@ class UserService:
         db.add(user_identity)
         
         
+        # Find the account type ID for the requested type ("SAVINGS" or "CURRENT")
+        account_type_query = select(AccountType).where(
+            and_(
+                AccountType.tenant_id == admin_tenant_id,
+                AccountType.name == user_in.account_type
+            )
+        )
+        account_type_result = await db.execute(account_type_query)
+        account_type_obj = account_type_result.scalar_one_or_none()
+        
+        if not account_type_obj:
+            # Fallback or error - should exist if tenant initialized correctly
+            raise ValueError(f"Account type '{user_in.account_type}' not found for this tenant")
+
         # Create bank account for the user
         account_in = AccountCreateByAdmin(
             user_id=new_user.id,
-            account_type=user_in.account_type
+            account_type_id=account_type_obj.id
         )
         await AccountService.create_account(
             db, account_in, new_user.id, admin_tenant_id

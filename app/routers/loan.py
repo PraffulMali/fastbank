@@ -10,9 +10,12 @@ from app.schemas.loan import (
     LoanCreate,
     LoanApprovalDecision,
     LoanResponse,
-    LoanUserResponse
+    LoanUserResponse,
+    AdvanceLoanRepaymentRequest,
+    AdvanceLoanRepaymentResponse
 )
 from app.services.loan_service import LoanService
+from app.services.advance_loan_repayment_service import AdvanceLoanRepaymentService
 from app.dependencies import get_current_user, require_tenant_admin
 from app.utils.pagination import Paginator, Page
 
@@ -30,9 +33,17 @@ async def apply_for_loan(
 ):
     """
     Apply for a loan (USER only).
-    - USER: Can apply for loan on their own account
-    - Requires: account_id, principal_amount, tenure_months, loan_purpose
-    - Interest rate is set automatically by the system
+    
+    Flow:
+    - USER provides: account_id, loan_type_id, principal_amount, tenure_months, loan_purpose
+    - System fetches interest rate from INTEREST_RULES based on loan_type_id
+    - Interest rate is stored as snapshot in loan record (preserves contract integrity)
+    - EMI is calculated and stored
+    - Loan is initialized with status=APPLIED, remaining_principal=principal_amount
+    - Notifications sent to USER (confirmation) and all ADMINs (new application alert)
+    
+    Restrictions:
+    - Only regular users can apply for loans
     - ADMIN/SUPER_ADMIN: Cannot access this endpoint
     """
     # Only regular users can apply for loans
@@ -55,9 +66,6 @@ async def apply_for_loan(
             current_user.id,
             current_user.tenant_id
         )
-        
-        # TODO (WebSocket): After loan created, notify admins in real-time
-        # await notify_admins_new_loan(current_user.tenant_id, loan)
         
         return loan
     except ValueError as e:
@@ -168,9 +176,22 @@ async def process_loan_application(
 ):
     """
     Approve or reject a loan application (ADMIN only).
-    - ADMIN: Reviews loan_purpose and decides to approve/reject
-    - On approval: loan status → APPROVED (transaction will be created later)
-    - On rejection: loan status → REJECTED with mandatory rejection_reason
+    
+    On APPROVAL:
+    - All operations are atomic within a single database transaction
+    - Updates loan status to APPROVED
+    - Records decision metadata (decided_by, decided_at)
+    - Creates CREDIT transaction for disbursement
+    - Updates account balance
+    - Sends notifications to user (approval + disbursement)
+    
+    On REJECTION:
+    - Updates loan status to REJECTED
+    - Stores rejection_reason (mandatory)
+    - Records decision metadata (decided_by, decided_at)
+    - Sends notification to user with rejection reason
+    
+    Critical: Uses atomic transaction boundary to ensure data consistency
     - SUPER_ADMIN: Cannot access this endpoint
     """
     loan = await LoanService.get_loan_by_id(db, loan_id)
@@ -194,12 +215,6 @@ async def process_loan_application(
             current_user.id,
             current_user.tenant_id
         )
-        
-        # TODO (WebSocket): After loan decision, notify user in real-time
-        # if decision.decision == "APPROVED":
-        #     await notify_user_loan_approved(updated_loan.user_id, updated_loan)
-        # else:
-        #     await notify_user_loan_rejected(updated_loan.user_id, updated_loan, decision.rejection_reason)
         
         return updated_loan
     except ValueError as e:
@@ -241,3 +256,85 @@ async def delete_loan(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+@router.post("/{loan_id}/advance-repayment", response_model=AdvanceLoanRepaymentResponse)
+async def make_advance_loan_repayment(
+    loan_id: uuid.UUID,
+    repayment_request: AdvanceLoanRepaymentRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    """
+    Make an advance loan repayment (USER only).
+    
+    This endpoint allows borrowers to make advance payments toward their active approved loans.
+    
+    **Process Flow:**
+    1. Validates loan eligibility (APPROVED status, remaining principal > 0)
+    2. Converts payment amount from rupees to paisa
+    3. Checks account balance for sufficient funds
+    4. Calculates accrued interest using monthly interest rate
+    5. Allocates payment: **interest first, then principal**
+    6. Reduces loan's remaining_principal by principal component only
+    7. Determines if payment results in foreclosure (full payoff)
+    8. Recalculates remaining tenure using amortization formula if not foreclosed
+    9. Atomically executes:
+       - Creates DEBIT transaction (reference_type=LOAN)
+       - Updates account balance
+       - Updates loan (remaining_principal, tenure, status)
+       - Creates loan repayment record
+    10. Sends success/failure notifications (and email on failure)
+    
+    **Payment Allocation:**
+    - Interest Component = Remaining Principal × (Annual Rate / 12 / 100)
+    - Principal Component = Payment Amount - Interest Component
+    - Remaining Principal = Old Remaining Principal - Principal Component
+    
+    **Tenure Recalculation:**
+    - Uses amortization formula: n = -log(1 - (P × r / EMI)) / log(1 + r)
+    - Requires EMI > P × r for formula to work
+    - If condition not met, tenure remains unchanged (loan may need restructuring)
+    
+    **Foreclosure:**
+    - Triggered when payment clears full outstanding obligation
+    - Loan status changes to FORECLOSED
+    - Tenure set to 0
+    
+    **Failure Handling:**
+    - If insufficient funds: NO financial state is modified
+    - Sends notification and email to user
+    - Returns detailed error message
+    
+    **Restrictions:**
+    - Only loan owner (USER) can make advance repayments
+    - Loan must be in APPROVED status
+    - Loan must have remaining principal > 0
+    - Account must have sufficient balance
+    """
+    # Only regular users can make advance repayments on their own loans
+    if current_user.role != UserRole.USER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only regular users can make advance loan repayments"
+        )
+    
+    success, message, details = await AdvanceLoanRepaymentService.process_advance_repayment(
+        db=db,
+        loan_id=loan_id,
+        payment_amount_rupees=repayment_request.payment_amount,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id
+    )
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message
+        )
+    
+    return AdvanceLoanRepaymentResponse(
+        success=success,
+        message=message,
+        **details if details else {}
+    )

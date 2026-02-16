@@ -44,6 +44,8 @@ class LoanStatus(str, Enum):
     APPLIED = "APPLIED"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+    CLOSED = "CLOSED"  # Loan fully repaid through normal EMI schedule
+    FORECLOSED = "FORECLOSED"  # Loan closed early through advance payment
 
 class RuleType(str, Enum):
     ACCOUNT = "ACCOUNT"

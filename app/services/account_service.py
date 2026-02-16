@@ -9,7 +9,8 @@ import string
 
 from app.models.account import Account
 from app.models.user import User
-from app.models.enums import AccountType, UserRole
+from app.models.enums import UserRole
+from app.models.account_type import AccountType
 from app.utils.pagination import Paginator, Page
 from app.schemas.account import (
     AccountCreateByAdmin, 
@@ -53,13 +54,22 @@ class AccountService:
         if not user.is_active:
             raise ValueError("Cannot create account for inactive user")
         
+        # Validate account type exists for this tenant
+        account_type_id = account_in.account_type_id
+        account_type = await db.get(AccountType, account_type_id)
+        
+        if not account_type:
+            raise ValueError("Account type not found")
+            
+        if account_type.tenant_id != tenant_id:
+            raise ValueError("Account type does not belong to this tenant")
+        
         # Check if user already has an account of this type in this tenant
-        account_type = AccountType(account_in.account_type)
         existing_query = select(Account).where(
             and_(
                 Account.tenant_id == tenant_id,
                 Account.user_id == user_id,
-                Account.account_type == account_type,
+                Account.account_type_id == account_type_id,
                 Account.is_active == True
             )
         )
@@ -67,7 +77,7 @@ class AccountService:
         existing_account = result.scalar_one_or_none()
         
         if existing_account:
-            raise ValueError(f"User already has an active {account_in.account_type} account")
+            raise ValueError(f"User already has an active {account_type.name} account")
         
         # Generate unique account number
         account_number = None
@@ -88,7 +98,7 @@ class AccountService:
             tenant_id=tenant_id,
             user_id=user_id,
             account_number=account_number,
-            account_type=account_type,
+            account_type_id=account_type_id,
             balance=0,
             currency="INR",
             is_active=True

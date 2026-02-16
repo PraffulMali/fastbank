@@ -11,14 +11,8 @@ class AccountCreateByAdmin(BaseModel):
     Requires user_id and account_type.
     """
     user_id: uuid.UUID
-    account_type: str = Field(default="SAVINGS")
-    
-    @field_validator("account_type")
-    def validate_account_type(cls, v: str) -> str:
-        v = v.upper()
-        if v not in ["SAVINGS", "CURRENT"]:
-            raise ValueError("Account type must be either SAVINGS or CURRENT")
-        return v
+
+    account_type_id: uuid.UUID
 
 
 class AccountUpdate(BaseModel):
@@ -37,6 +31,7 @@ class AccountResponse(BaseModel):
     tenant_id: uuid.UUID
     user_id: uuid.UUID
     account_number: str
+    account_type_id: uuid.UUID
     account_type: str
     balance: Decimal
     currency: str
@@ -46,6 +41,12 @@ class AccountResponse(BaseModel):
     deleted_at: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("account_type", mode="before")
+    def get_account_type_name(cls, v):
+        if hasattr(v, "name"):
+            return v.name
+        return str(v)
 
     @field_validator("balance", mode="before")
     def convert_balance_to_rupees(cls, v):
@@ -62,6 +63,7 @@ class AccountUserSingleResponse(BaseModel):
     """
     id: uuid.UUID
     account_number: str
+    account_type_id: uuid.UUID
     account_type: str
     balance: Decimal
     currency: str
@@ -69,6 +71,12 @@ class AccountUserSingleResponse(BaseModel):
     updated_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("account_type", mode="before")
+    def get_account_type_name(cls, v):
+        if hasattr(v, "name"):
+            return v.name
+        return str(v)
     
     @field_validator("balance", mode="before")
     def convert_balance_to_rupees(cls, v):
