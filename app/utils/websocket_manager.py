@@ -21,7 +21,9 @@ class ConnectionManager:
         self.active_connections[user_id].append(websocket)
 
         logger.info(
-            f"User {user_id} connected. Total connections: {len(self.active_connections[user_id])}"
+            f"WebSocket Connected - Status=Joined | "
+            f"UserID={user_id} | "
+            f"ConnectionCount={len(self.active_connections[user_id])}"
         )
 
     def disconnect(self, websocket: WebSocket, user_id: uuid.UUID):
@@ -29,7 +31,9 @@ class ConnectionManager:
             if websocket in self.active_connections[user_id]:
                 self.active_connections[user_id].remove(websocket)
                 logger.info(
-                    f"User {user_id} disconnected. Remaining connections: {len(self.active_connections[user_id])}"
+                    f"WebSocket Disconnected - Status=Left | "
+                    f"UserID={user_id} | "
+                    f"RemainingConnections={len(self.active_connections[user_id])}"
                 )
 
             if not self.active_connections[user_id]:
@@ -42,7 +46,7 @@ class ConnectionManager:
                 try:
                     await connection.send_json(message)
                 except Exception as e:
-                    logger.error(f"Error sending message to user {user_id}: {e}")
+                    logger.error(f"WebSocket Send Error - UserID={user_id} | Error={str(e)}")
                     disconnected.append(connection)
 
             for dead_connection in disconnected:

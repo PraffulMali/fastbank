@@ -58,9 +58,10 @@ class LoanRepaymentService:
         if account.balance < loan.emi_amount:
             shortfall = loan.emi_amount - account.balance
             logger.warning(
-                f"Insufficient funds for EMI deduction. "
-                f"Loan: {loan.id}, User: {user.email}, "
-                f"Required: {loan.emi_amount / 100}, Available: {account.balance / 100}"
+                f"EMI Deduction Failed - Reason=InsufficientFunds | "
+                f"LoanID={loan.id} | "
+                f"RequiredAmount={loan.emi_amount / 100} | "
+                f"AvailableBalance={account.balance / 100}"
             )
             return (
                 False,
@@ -112,12 +113,12 @@ class LoanRepaymentService:
         await db.flush()
 
         logger.info(
-            f"EMI deducted successfully. "
-            f"Loan: {loan.id}, User: {user.email}, "
-            f"Amount: {loan.emi_amount / 100}, "
-            f"Principal: {principal_component / 100}, "
-            f"Interest: {interest_component / 100}, "
-            f"Remaining: {loan.remaining_principal / 100}"
+            f"EMI Deducted - Status=Success | "
+            f"LoanID={loan.id} | "
+            f"AmountPaid={loan.emi_amount / 100} | "
+            f"PrincipalComponent={principal_component / 100} | "
+            f"InterestComponent={interest_component / 100} | "
+            f"RemainingPrincipal={loan.remaining_principal / 100}"
         )
 
         return (True, f"EMI of ₹{loan.emi_amount / 100:,.2f} deducted successfully")
@@ -143,7 +144,7 @@ class LoanRepaymentService:
             "errors": [],
         }
 
-        logger.info(f"Processing monthly EMIs for {len(loans)} loans")
+        logger.info(f"Monthly EMI Processing Started - LoanCount={len(loans)}")
 
         for loan in loans:
             try:
@@ -201,9 +202,10 @@ class LoanRepaymentService:
                         )
 
                     logger.warning(
-                        f"Insufficient funds for EMI deduction. "
-                        f"Loan: {loan.id}, User: {user.email}, "
-                        f"Required: {loan.emi_amount / 100}, Available: {account.balance / 100}"
+                        f"EMI Deduction Failed - Reason=InsufficientFunds | "
+                        f"LoanID={loan.id} | "
+                        f"RequiredAmount={loan.emi_amount / 100} | "
+                        f"AvailableBalance={account.balance / 100}"
                     )
 
                     raise Exception(
@@ -277,12 +279,12 @@ class LoanRepaymentService:
                 )
 
                 logger.info(
-                    f"EMI deducted successfully. "
-                    f"Loan: {loan.id}, User: {user.email}, "
-                    f"Amount: {emi_amount / 100}, "
-                    f"Principal: {principal_component / 100}, "
-                    f"Interest: {interest_component / 100}, "
-                    f"Remaining: {remaining_principal_after / 100}"
+                    f"EMI Deducted - Status=Success | "
+                    f"LoanID={loan.id} | "
+                    f"AmountPaid={emi_amount / 100} | "
+                    f"PrincipalComponent={principal_component / 100} | "
+                    f"InterestComponent={interest_component / 100} | "
+                    f"RemainingPrincipal={remaining_principal_after / 100}"
                 )
 
                 stats["successful"] += 1
@@ -291,14 +293,14 @@ class LoanRepaymentService:
             except Exception as e:
                 stats["failed"] += 1
                 stats["errors"].append({"loan_id": str(loan.id), "message": str(e)})
-                logger.error(f"Failed to process EMI for loan {loan.id}: {str(e)}")
+                logger.error(f"EMI Processing Error - LoanID={loan.id} | Error={str(e)}")
 
         logger.info(
-            f"Monthly EMI processing complete. "
-            f"Total: {stats['total_loans']}, "
-            f"Successful: {stats['successful']}, "
-            f"Failed: {stats['failed']}, "
-            f"Amount Collected: ₹{stats['total_amount_collected'] / 100:,.2f}"
+            f"Monthly EMI Processing Complete - "
+            f"TotalLoans={stats['total_loans']} | "
+            f"Successful={stats['successful']} | "
+            f"Failed={stats['failed']} | "
+            f"TotalAmountCollected={stats['total_amount_collected'] / 100}"
         )
 
         return stats

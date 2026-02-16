@@ -40,7 +40,7 @@ async def websocket_endpoint(
 
         await manager.connect(websocket, user.id)
 
-        logger.info(f"WebSocket connected: User {user.id} ({user.email})")
+        logger.info(f"WebSocket Auth Success - UserID={user.id}")
 
         await websocket.send_json(
             {
@@ -58,13 +58,13 @@ async def websocket_endpoint(
                 break
 
     except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected: User {user.id if user else 'Unknown'}")
+        logger.info(f"WebSocket Disconnect Event - UserID={user.id if user else 'Unknown'}")
         if user:
             manager.disconnect(websocket, user.id)
 
     except (ValueError, HTTPException) as e:
         detail = str(e.detail) if hasattr(e, "detail") else str(e)
-        logger.error(f"WebSocket authentication error: {detail}")
+        logger.error(f"WebSocket Auth Failed - Error={detail}")
         try:
             await websocket.close(
                 code=status.WS_1008_POLICY_VIOLATION, reason=detail[:120]
@@ -73,7 +73,7 @@ async def websocket_endpoint(
             pass
 
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"WebSocket Fatal Error - Error={str(e)}")
         if user:
             manager.disconnect(websocket, user.id)
         try:

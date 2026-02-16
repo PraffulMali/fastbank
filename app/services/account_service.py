@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+import logging
 import random
 import string
 
@@ -17,6 +18,9 @@ from app.schemas.account import (
     AccountUpdate,
     AccountUserSingleResponse,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class AccountService:
@@ -93,6 +97,8 @@ class AccountService:
         db.add(new_account)
         await db.commit()
         await db.refresh(new_account)
+
+        logger.info(f"Account Created - Status=Success | TenantID={tenant_id} | UserID={user_id} | AccountID={new_account.id}")
 
         return new_account
 
@@ -221,4 +227,7 @@ class AccountService:
 
         await db.commit()
         await db.refresh(account)
+
+        logger.info(f"Account Deleted - Status=Success | AccountID={account_id}")
+
         return account

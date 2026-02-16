@@ -41,18 +41,15 @@ class EmailService:
                     start_tls=True if settings.SMTP_PORT == 587 else False,
                 )
 
-                logger.info(f"Email successfully sent to {to_email}")
+                logger.info("Email Sent - Status=Success")
 
             else:
-                logger.info("SMTP not configured — logging email instead")
-                logger.info(f"[EMAIL] To: {to_email}")
-                logger.info(f"[EMAIL] Subject: {subject}")
-                logger.info(f"[EMAIL] Body: {body}")
+                logger.info("Email Logged - Status=SMTP_Not_Configured")
 
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {str(e)}")
+            logger.error(f"Email Failed - Status=Error | Error={str(e)}")
             return False
 
     @staticmethod
@@ -69,7 +66,7 @@ class EmailService:
         )  # username unknown here, kept generic
 
         await EmailService.send_email(email, subject, content)
-        logger.info(f"Verification email task completed for {email}")
+        logger.info("Verification Email Sent - Type=Task_Completed")
 
     @staticmethod
     async def send_password_reset_email(email: str, token: str, user_id: str):
@@ -81,7 +78,7 @@ class EmailService:
         subject, content = EmailTemplates.get_password_reset_email(reset_link)
 
         await EmailService.send_email(email, subject, content)
-        logger.info(f"Password reset email sent to {email}")
+        logger.info("Password Reset Email Sent - Status=Success")
 
     @staticmethod
     async def send_verification_resend_email(email: str, token: str, user_id: str):
@@ -93,7 +90,7 @@ class EmailService:
         subject, content = EmailTemplates.get_verification_resend_email(verify_link)
 
         await EmailService.send_email(email, subject, content)
-        logger.info(f"Verification resend email sent to {email}")
+        logger.info("Verification Resend Email Sent - Status=Success")
 
     @staticmethod
     async def send_emi_failure_email(

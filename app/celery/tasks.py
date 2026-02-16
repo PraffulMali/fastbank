@@ -16,14 +16,12 @@ def process_monthly_emi_deductions():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        logger.info(
-            f"[EMI Task] Starting monthly EMI deduction process at {datetime.now(timezone.utc)}"
-        )
+        logger.info("EMI Task Started - Action=Monthly_Deduction")
         stats = loop.run_until_complete(_process_monthly_emi_deductions_task())
-        logger.info(f"[EMI Task] Completed. Stats: {stats}")
+        logger.info(f"EMI Task Completed - Result=Success | Stats={stats}")
         return stats
     except Exception as e:
-        logger.error(f"[EMI Task] Failed with error: {str(e)}")
+        logger.error(f"EMI Task Failed - Status=Error | Error={str(e)}")
         raise
     finally:
         loop.close()
@@ -39,7 +37,7 @@ async def _process_monthly_emi_deductions_task():
             return stats
         except Exception as e:
             await db.rollback()
-            logger.error(f"Error in EMI deduction task: {str(e)}")
+            logger.error(f"EMI Task Internal Error - Error={str(e)}")
             raise
 
 
@@ -52,14 +50,12 @@ def process_monthly_interest_accrual():
     asyncio.set_event_loop(loop)
 
     try:
-        logger.info(
-            f"[Interest Task] Starting monthly interest accrual at {datetime.now(timezone.utc)}"
-        )
+        logger.info("Interest Task Started - Action=Monthly_Accrual")
         stats = loop.run_until_complete(_process_monthly_interest_accrual_task())
-        logger.info(f"[Interest Task] Completed. Stats: {stats}")
+        logger.info(f"Interest Task Completed - Result=Success | Stats={stats}")
         return stats
     except Exception as e:
-        logger.error(f"[Interest Task] Failed with error: {str(e)}")
+        logger.error(f"Interest Task Failed - Status=Error | Error={str(e)}")
         raise
     finally:
         loop.close()
@@ -73,5 +69,5 @@ async def _process_monthly_interest_accrual_task():
             return stats
         except Exception as e:
             await db.rollback()
-            logger.error(f"Error in interest accrual task: {str(e)}")
+            logger.error(f"Interest Task Internal Error - Error={str(e)}")
             raise

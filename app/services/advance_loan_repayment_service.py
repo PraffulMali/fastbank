@@ -99,8 +99,9 @@ class AdvanceLoanRepaymentService:
         min_emi = remaining_principal * monthly_rate
         if emi_amount <= min_emi:
             logger.warning(
-                f"EMI ({emi_amount}) is not greater than P × r ({min_emi}). "
-                f"Cannot recalculate tenure. Loan should be restructured."
+                f"Tenure Recalculation Warning - Reason=EMIBelowInterest | "
+                f"EMIAmount={emi_amount} | "
+                f"MinRequiredEMI={min_emi}"
             )
             return None
 
@@ -111,7 +112,7 @@ class AdvanceLoanRepaymentService:
 
             return math.ceil(new_tenure)
         except (ValueError, ZeroDivisionError) as e:
-            logger.error(f"Error calculating tenure: {str(e)}")
+            logger.error(f"Tenure Calculation Error - Error={str(e)}")
             return None
 
     @staticmethod
@@ -204,9 +205,7 @@ class AdvanceLoanRepaymentService:
                 if calculated_tenure is not None:
                     new_tenure = calculated_tenure
                 else:
-                    logger.warning(
-                        f"Cannot recalculate tenure for loan {loan_id}. Keeping original tenure."
-                    )
+                    logger.warning(f"Tenure Recalculation Skipped - Status=Failed | LoanID={loan_id}")
                     new_tenure = loan.tenure_months
 
             transaction_id = None
@@ -283,18 +282,17 @@ class AdvanceLoanRepaymentService:
             }
 
             logger.info(
-                f"Advance repayment processed. Loan: {loan_id}, "
-                f"Amount: ₹{payment_amount_rupees}, "
-                f"Principal: ₹{principal_component / 100}, "
-                f"Interest: ₹{interest_component / 100}, "
-                f"Foreclosure: {is_foreclosure}"
+                f"Advance Repayment Processed - Status=Success | "
+                f"LoanID={loan_id} | "
+                f"Amount={payment_amount_rupees} | "
+                f"PrincipalComponent={principal_component / 100} | "
+                f"InterestComponent={interest_component / 100} | "
+                f"Foreclosure={is_foreclosure}"
             )
 
             return (True, "Advance repayment processed successfully", details)
 
         except Exception as e:
-            logger.error(
-                f"Error processing advance repayment for loan {loan_id}: {str(e)}"
-            )
+            logger.error(f"Advance Repayment Error - LoanID={loan_id} | Error={str(e)}")
             await db.rollback()
             return (False, f"Error: {str(e)}", None)

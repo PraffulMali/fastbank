@@ -34,7 +34,8 @@ class TransactionBackgroundTasks:
 
                     if len(transactions) != 2:
                         logger.error(
-                            f"Transfer {reference_id}: Expected 2 transactions"
+                            f"Transfer Error - Reason=InvalidTransactionCount | "
+                            f"ReferenceID={reference_id}"
                         )
                         return
 
@@ -54,7 +55,7 @@ class TransactionBackgroundTasks:
                         debit_txn.status != TransactionStatus.PENDING
                         or credit_txn.status != TransactionStatus.PENDING
                     ):
-                        logger.warning(f"Transfer {reference_id}: Not PENDING")
+                        logger.warning(f"Transfer Skipped - Status=Not_Pending | ReferenceID={reference_id}")
                         return
 
                     debit_account = (
@@ -74,14 +75,14 @@ class TransactionBackgroundTasks:
                     ).scalar_one()
 
                     if not debit_account or not credit_account:
-                        logger.error(f"Transfer {reference_id}: Account not found")
+                        logger.error(f"Transfer Error - Reason=AccountNotFound | ReferenceID={reference_id}")
 
                         debit_txn.status = TransactionStatus.FAILED
                         credit_txn.status = TransactionStatus.FAILED
                         return
 
                     if debit_account.balance < debit_txn.amount:
-                        logger.error(f"Transfer {reference_id}: Insufficient balance")
+                        logger.error(f"Transfer Error - Reason=InsufficientBalance | ReferenceID={reference_id}")
 
                         debit_txn.status = TransactionStatus.FAILED
                         credit_txn.status = TransactionStatus.FAILED
@@ -93,7 +94,7 @@ class TransactionBackgroundTasks:
                     debit_txn.status = TransactionStatus.SUCCESS
                     credit_txn.status = TransactionStatus.SUCCESS
 
-                logger.info(f"Transfer {reference_id}: SUCCESS")
+                logger.info(f"Transfer Success - Status=Completed | ReferenceID={reference_id}")
 
                 await db.refresh(debit_txn)
                 await db.refresh(credit_txn)
@@ -105,7 +106,7 @@ class TransactionBackgroundTasks:
                 )
 
             except Exception as e:
-                logger.error(f"Transfer {reference_id}: Error - {e}")
+                logger.error(f"Transfer Error - ReferenceID={reference_id} | Error={str(e)}")
 
                 await db.rollback()
 
@@ -136,7 +137,9 @@ class TransactionBackgroundTasks:
 
                 except Exception as nested_error:
                     logger.error(
-                        f"Transfer {reference_id}: Failed to mark FAILED - {nested_error}"
+                        f"Transfer Status Update Failed - Status=Fallback_Error | "
+                        f"ReferenceID={reference_id} | "
+                        f"Error={str(nested_error)}"
                     )
 
     @staticmethod
@@ -150,7 +153,7 @@ class TransactionBackgroundTasks:
         await db.refresh(debit_txn)
         await db.refresh(credit_txn)
 
-        logger.info(f"Transfer {debit_txn.reference_id}: FAILED - {reason}")
+        logger.info(f"Transfer Failed - Status=Marked_Failed | ReferenceID={debit_txn.reference_id} | Reason={reason}")
 
         debit_account = await db.get(Account, debit_txn.account_id)
 
@@ -185,7 +188,9 @@ class TransactionBackgroundTasks:
             )
         except Exception as e:
             logger.error(
-                f"Failed to send success notification to sender {debit_account.user_id}: {e}"
+                f"Notification Error - Type=Success_Sender | "
+                f"UserID={debit_account.user_id} | "
+                f"Error={str(e)}"
             )
 
         try:
@@ -200,7 +205,9 @@ class TransactionBackgroundTasks:
             )
         except Exception as e:
             logger.error(
-                f"Failed to send success notification to receiver {credit_account.user_id}: {e}"
+                f"Notification Error - Type=Success_Receiver | "
+                f"UserID={credit_account.user_id} | "
+                f"Error={str(e)}"
             )
 
         if debit_txn.amount > 100000 * 100:
@@ -228,7 +235,9 @@ class TransactionBackgroundTasks:
                         )
                     except Exception as e:
                         logger.error(
-                            f"Failed to send high-value notification to admin {admin.id}: {e}"
+                            f"Notification Error - Type=HighValue_Admin | "
+                            f"AdminID={admin.id} | "
+                            f"Error={str(e)}"
                         )
             except Exception as e:
-                logger.error(f"Failed to process high-value notifications: {e}")
+                logger.error(f"Notification Batch Error - Type=HighValue | Error={str(e)}")

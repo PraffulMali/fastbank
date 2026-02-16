@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
+import logging
 from sqlalchemy import select, and_
 
 from app.models.loan import Loan
@@ -15,6 +16,9 @@ from app.schemas.loan import LoanCreate, LoanApprovalDecision
 
 MAX_LOAN_AMOUNT = Decimal("10000000.00")
 MIN_LOAN_AMOUNT = Decimal("10000.00")
+
+
+logger = logging.getLogger(__name__)
 
 
 class LoanService:
@@ -56,6 +60,7 @@ class LoanService:
         db: AsyncSession, loan_in: LoanCreate, user_id: uuid.UUID, tenant_id: uuid.UUID
     ) -> Loan:
         if loan_in.principal_amount < MIN_LOAN_AMOUNT:
+            logger.error(f"Loan Application Failed - TenantID={tenant_id} | UserID={user_id} | Reason=AmountBelowMinimum | Amount={loan_in.principal_amount}")
             raise ValueError(f"Loan amount must be at least ₹{MIN_LOAN_AMOUNT:,.2f}")
 
         if loan_in.principal_amount > MAX_LOAN_AMOUNT:
@@ -139,6 +144,8 @@ class LoanService:
             status=LoanStatus.APPLIED,
             applied_at=datetime.now(timezone.utc),
         )
+
+        logger.info(f"Loan Applied - TenantID={tenant_id} | UserID={user_id} | LoanTypeID={loan_in.loan_type_id} | Amount={principal_paisa}")
 
         db.add(new_loan)
         await db.commit()
@@ -248,6 +255,8 @@ class LoanService:
             loan.decided_by = admin_id
             loan.decided_at = datetime.now(timezone.utc)
             loan.rejection_reason = decision.rejection_reason
+
+        logger.info(f"Loan {decision.decision.capitalize()} - TenantID={tenant_id} | LoanID={loan.id} | AdminID={admin_id} | Amount={loan.principal_amount}")
 
         await db.commit()
         await db.refresh(loan)
