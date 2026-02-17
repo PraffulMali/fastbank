@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
-from app.models.enums import UserRole
 from app.schemas.transaction import (
     TransferRequest,
     DepositRequest,
@@ -14,7 +13,7 @@ from app.schemas.transaction import (
     TransactionDetailResponse,
 )
 from app.services.transaction_service import TransactionService
-from app.dependencies import get_current_user, require_user, require_tenant_member
+from app.dependencies import require_user, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])

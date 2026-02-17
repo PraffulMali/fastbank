@@ -1,5 +1,4 @@
-from typing import Optional, Tuple
-import uuid
+from typing import Tuple
 from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +31,6 @@ class LoanRepaymentService:
         emi_amount: int,
         remaining_principal: int,
         annual_interest_rate: Decimal,
-        tenure_months: int,
     ) -> Tuple[int, int]:
         """
         Calculate the EMI split into principal and interest components.
@@ -147,7 +145,6 @@ class LoanRepaymentService:
                         emi_amount=loan.emi_amount,
                         remaining_principal=loan.remaining_principal,
                         annual_interest_rate=loan.interest_rate,
-                        tenure_months=loan.tenure_months,
                     )
                 )
 

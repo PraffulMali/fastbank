@@ -1,7 +1,6 @@
 from typing import Optional, List
 import uuid
 from datetime import datetime, timezone
-from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 import logging
@@ -10,7 +9,6 @@ import string
 
 from app.models.account import Account
 from app.models.user import User
-from app.models.enums import UserRole
 from app.models.account_type import AccountType
 from app.utils.pagination import Paginator, Page
 from app.schemas.account import (

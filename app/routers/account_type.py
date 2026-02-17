@@ -12,8 +12,7 @@ from app.schemas.account_type import (
     AccountTypeWithRulesResponse,
 )
 from app.services.account_type_service import AccountTypeService
-from app.models.enums import UserRole
-from app.dependencies import require_admin, require_tenant_admin, require_tenant_member
+from app.dependencies import require_tenant_admin, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/account-types", tags=["Account Types"])

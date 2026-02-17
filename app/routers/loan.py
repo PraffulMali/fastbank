@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.database import get_db
 from app.models.user import User
-from app.models.enums import UserRole, LoanStatus
+from app.models.enums import LoanStatus
 from app.schemas.loan import (
     LoanCreate,
     LoanApprovalDecision,
@@ -20,7 +20,7 @@ from app.models.loan_repayment import LoanRepayment
 from app.models.loan import Loan
 from app.services.loan_service import LoanService
 from app.services.advance_loan_repayment_service import AdvanceLoanRepaymentService
-from app.dependencies import get_current_user, require_tenant_admin, require_user
+from app.dependencies import require_tenant_admin, require_user
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/loans", tags=["Loans"])

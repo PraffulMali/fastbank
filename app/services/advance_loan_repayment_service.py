@@ -3,7 +3,6 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from fastapi import BackgroundTasks
 import logging
 import math

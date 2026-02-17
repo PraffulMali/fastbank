@@ -2,10 +2,9 @@ from typing import Annotated
 import uuid
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
+from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.settings import settings
 from app.database import get_db
 from app.database.redis import get_redis
 from app.models.user import User

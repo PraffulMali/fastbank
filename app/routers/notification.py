@@ -7,12 +7,10 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.notification import (
     NotificationResponse,
-    NotificationListResponse,
     UnreadCountResponse,
-    MarkAsReadRequest,
 )
 from app.services.notification_service import NotificationService
-from app.dependencies import get_current_user, require_tenant_member
+from app.dependencies import require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])

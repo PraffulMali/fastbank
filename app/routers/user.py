@@ -4,10 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.config.settings import settings
 from app.services.email_service import EmailService
 from app.models.user import User
-from app.models.enums import UserRole
 from app.schemas.user import (
     UserCreateBySuperAdmin,
     UserCreateByAdmin,
@@ -18,7 +16,7 @@ from app.schemas.user import (
     ChangePasswordRequest,
 )
 from app.services.user_service import UserService
-from app.dependencies import get_current_user, require_super_admin, require_admin
+from app.dependencies import get_current_user, require_admin
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/users", tags=["Users"])

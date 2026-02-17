@@ -1,10 +1,7 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
-from sqlalchemy import select, func
 
 from app.celery.app import celery_app
-from app.models.user import User
 from app.database.session import AsyncSessionLocal
 from app.services.loan_repayment_service import LoanRepaymentService
 

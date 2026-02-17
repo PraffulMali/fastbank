@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, update
@@ -6,7 +6,6 @@ from datetime import datetime
 
 from app.models.notification import Notification
 from app.models.enums import NotificationType
-from app.models.user import User
 from app.utils.pagination import Paginator, Page
 from app.utils.websocket_manager import get_websocket_manager
 

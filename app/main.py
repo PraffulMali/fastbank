@@ -16,7 +16,6 @@ from app.routers import (
 )
 from app.routers import websocket as ws_router
 from app.routers import notification
-from app.celery.app import celery_app
 from app.database.redis import get_redis, close_redis
 from contextlib import asynccontextmanager
 from app.utils.logger import setup_logging

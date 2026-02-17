@@ -2,11 +2,8 @@ from typing import Optional, Tuple
 import uuid
 from fastapi import BackgroundTasks
 import logging
-from decimal import Decimal
-from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
-import asyncio
+from sqlalchemy import select, and_
 
 from app.models.transaction import Transaction
 from app.models.account import Account

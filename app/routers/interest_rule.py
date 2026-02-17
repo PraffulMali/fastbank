@@ -1,9 +1,7 @@
-from typing import Annotated, Optional
+from typing import Annotated
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from decimal import Decimal
-
 from app.database import get_db
 from app.models.user import User
 from app.schemas.interest_rule import (
@@ -12,8 +10,7 @@ from app.schemas.interest_rule import (
     InterestRuleResponse,
 )
 from app.services.interest_rule_service import InterestRuleService
-from app.models.enums import UserRole
-from app.dependencies import require_admin, require_tenant_admin, require_tenant_member
+from app.dependencies import require_tenant_admin, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/interest-rules", tags=["Interest Rules"])

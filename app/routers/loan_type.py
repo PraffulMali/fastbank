@@ -12,8 +12,7 @@ from app.schemas.loan_type import (
     LoanTypeWithRateResponse,
 )
 from app.services.loan_type_service import LoanTypeService
-from app.models.enums import UserRole
-from app.dependencies import require_admin, require_tenant_admin, require_tenant_member
+from app.dependencies import require_tenant_admin, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/loan-types", tags=["Loan Types"])

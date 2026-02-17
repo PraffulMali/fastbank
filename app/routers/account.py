@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
-from app.models.enums import UserRole
 from app.schemas.account import (
     AccountCreateByAdmin,
     AccountUpdate,
@@ -13,7 +12,7 @@ from app.schemas.account import (
     AccountUserResponse,
 )
 from app.services.account_service import AccountService
-from app.dependencies import get_current_user, require_tenant_admin, require_user
+from app.dependencies import require_tenant_admin, require_user
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/accounts", tags=["Accounts"])

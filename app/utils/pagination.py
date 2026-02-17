@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar, List, Any
+from typing import Generic, TypeVar, List
 from math import ceil
 
 from fastapi import Query

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
