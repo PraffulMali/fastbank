@@ -15,23 +15,17 @@ class AccountType(BaseModel):
     __tablename__ = "account_types"
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id"),
-        nullable=False
+        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False
     )
 
     name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     tenant: Mapped["Tenant"] = relationship(
-        "Tenant",
-        back_populates="account_types",
-        lazy="selectin"
+        "Tenant", back_populates="account_types", lazy="selectin"
     )
 
     interest_rules: Mapped[list["InterestRule"]] = relationship(
-        "InterestRule",
-        back_populates="account_type",
-        lazy="selectin"
+        "InterestRule", back_populates="account_type", lazy="selectin"
     )
 
     def __repr__(self) -> str:

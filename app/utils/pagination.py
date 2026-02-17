@@ -19,7 +19,7 @@ class Page(BaseModel, Generic[T]):
     has_next: bool
     has_previous: bool
     items: List[T]
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -53,7 +53,7 @@ class Paginator(Generic[T]):
         session: AsyncSession,
         query: Select,
     ) -> Page[T]:
-        
+
         count_stmt = select(func.count()).select_from(query.alias())
         total_result = await session.execute(count_stmt)
         total = total_result.scalar_one()

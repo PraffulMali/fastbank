@@ -17,18 +17,15 @@ logger = logging.getLogger(__name__)
 
 
 class TransactionBackgroundTasks:
-    
+
     @staticmethod
     async def process_transfer(reference_id: uuid.UUID):
         async with AsyncSessionLocal() as db:
             try:
-                # Simulate processing delay
                 await asyncio.sleep(5)
 
-                # ✅ START ATOMIC TRANSACTION
                 async with db.begin():
 
-                    # Fetch transactions
                     query = select(Transaction).where(
                         Transaction.reference_id == reference_id
                     )
@@ -36,29 +33,33 @@ class TransactionBackgroundTasks:
                     transactions = list(result.scalars().all())
 
                     if len(transactions) != 2:
-                        logger.error(f"Transfer {reference_id}: Expected 2 transactions")
+                        logger.error(
+                            f"Transfer Error - Reason=InvalidTransactionCount | "
+                            f"ReferenceID={reference_id}"
+                        )
                         return
 
-                    # Identify transactions
                     debit_txn = next(
-                        txn for txn in transactions
+                        txn
+                        for txn in transactions
                         if txn.transaction_type == TransactionType.DEBIT
                     )
 
                     credit_txn = next(
-                        txn for txn in transactions
+                        txn
+                        for txn in transactions
                         if txn.transaction_type == TransactionType.CREDIT
                     )
 
-                    # Validate states
                     if (
                         debit_txn.status != TransactionStatus.PENDING
                         or credit_txn.status != TransactionStatus.PENDING
                     ):
-                        logger.warning(f"Transfer {reference_id}: Not PENDING")
+                        logger.warning(
+                            f"Transfer Skipped - Status=Not_Pending | ReferenceID={reference_id}"
+                        )
                         return
 
-                    # ✅ LOCK ACCOUNT ROWS 🔥 CRITICAL FIX
                     debit_account = (
                         await db.execute(
                             select(Account)
@@ -76,50 +77,49 @@ class TransactionBackgroundTasks:
                     ).scalar_one()
 
                     if not debit_account or not credit_account:
-                        logger.error(f"Transfer {reference_id}: Account not found")
+                        logger.error(
+                            f"Transfer Error - Reason=AccountNotFound | ReferenceID={reference_id}"
+                        )
 
                         debit_txn.status = TransactionStatus.FAILED
                         credit_txn.status = TransactionStatus.FAILED
                         return
 
-                    # Balance check
                     if debit_account.balance < debit_txn.amount:
-                        logger.error(f"Transfer {reference_id}: Insufficient balance")
+                        logger.error(
+                            f"Transfer Error - Reason=InsufficientBalance | ReferenceID={reference_id}"
+                        )
 
                         debit_txn.status = TransactionStatus.FAILED
                         credit_txn.status = TransactionStatus.FAILED
                         return
 
-                    # ✅ SAFE ATOMIC UPDATE
                     debit_account.balance -= debit_txn.amount
                     credit_account.balance += credit_txn.amount
 
                     debit_txn.status = TransactionStatus.SUCCESS
                     credit_txn.status = TransactionStatus.SUCCESS
 
-                # ✅ AUTO COMMIT happens here
+                logger.info(
+                    f"Transfer Success - Status=Completed | ReferenceID={reference_id}"
+                )
 
-                logger.info(f"Transfer {reference_id}: SUCCESS")
-
-                # Refresh updated objects
                 await db.refresh(debit_txn)
                 await db.refresh(credit_txn)
                 await db.refresh(debit_account)
                 await db.refresh(credit_account)
 
-                # Send notifications (outside transaction)
                 await TransactionBackgroundTasks._send_transaction_notifications(
                     db, debit_txn, credit_txn, debit_account, credit_account
                 )
 
             except Exception as e:
-                logger.error(f"Transfer {reference_id}: Error - {e}")
+                logger.error(
+                    f"Transfer Error - ReferenceID={reference_id} | Error={str(e)}"
+                )
 
-                # ✅ No manual rollback needed if error occurs inside db.begin()
-                # But safe to call defensively
                 await db.rollback()
 
-                # Try marking FAILED (new transaction)
                 try:
                     async with db.begin():
 
@@ -131,12 +131,14 @@ class TransactionBackgroundTasks:
 
                         if len(transactions) == 2:
                             debit_txn = next(
-                                txn for txn in transactions
+                                txn
+                                for txn in transactions
                                 if txn.transaction_type == TransactionType.DEBIT
                             )
 
                             credit_txn = next(
-                                txn for txn in transactions
+                                txn
+                                for txn in transactions
                                 if txn.transaction_type == TransactionType.CREDIT
                             )
 
@@ -144,30 +146,30 @@ class TransactionBackgroundTasks:
                             credit_txn.status = TransactionStatus.FAILED
 
                 except Exception as nested_error:
-                    logger.error(f"Transfer {reference_id}: Failed to mark FAILED - {nested_error}")
+                    logger.error(
+                        f"Transfer Status Update Failed - Status=Fallback_Error | "
+                        f"ReferenceID={reference_id} | "
+                        f"Error={str(nested_error)}"
+                    )
 
-    
     @staticmethod
     async def _mark_transfer_failed(
-        db: AsyncSession,
-        debit_txn: Transaction,
-        credit_txn: Transaction,
-        reason: str
+        db: AsyncSession, debit_txn: Transaction, credit_txn: Transaction, reason: str
     ):
         debit_txn.status = TransactionStatus.FAILED
         credit_txn.status = TransactionStatus.FAILED
-        
+
         await db.commit()
         await db.refresh(debit_txn)
         await db.refresh(credit_txn)
-        
-        logger.info(f"Transfer {debit_txn.reference_id}: FAILED - {reason}")
-        
-        # Get accounts to fetch user info
+
+        logger.info(
+            f"Transfer Failed - Status=Marked_Failed | ReferenceID={debit_txn.reference_id} | Reason={reason}"
+        )
+
         debit_account = await db.get(Account, debit_txn.account_id)
-        
+
         if debit_account:
-            # Send failure notification to sender
             await NotificationService.create_notification(
                 db=db,
                 tenant_id=debit_txn.tenant_id,
@@ -175,18 +177,17 @@ class TransactionBackgroundTasks:
                 notification_type=NotificationType.TRANSACTION_FAILED,
                 message=f"Transfer of ₹{debit_txn.amount / 100} failed. Reason: {reason}",
                 reference_id=debit_txn.id,
-                reference_type="transaction"
+                reference_type="transaction",
             )
-    
+
     @staticmethod
     async def _send_transaction_notifications(
         db: AsyncSession,
         debit_txn: Transaction,
         credit_txn: Transaction,
         debit_account: Account,
-        credit_account: Account
+        credit_account: Account,
     ):
-        # Notification to sender (debit)
         try:
             await NotificationService.create_notification(
                 db=db,
@@ -195,12 +196,15 @@ class TransactionBackgroundTasks:
                 notification_type=NotificationType.TRANSACTION_SUCCESS,
                 message=f"Successfully transferred ₹{debit_txn.amount / 100} to account {credit_account.account_number}. New balance: ₹{debit_account.balance / 100}",
                 reference_id=debit_txn.id,
-                reference_type="transaction"
+                reference_type="transaction",
             )
         except Exception as e:
-            logger.error(f"Failed to send success notification to sender {debit_account.user_id}: {e}")
-        
-        # Notification to receiver (credit)
+            logger.error(
+                f"Notification Error - Type=Success_Sender | "
+                f"UserID={debit_account.user_id} | "
+                f"Error={str(e)}"
+            )
+
         try:
             await NotificationService.create_notification(
                 db=db,
@@ -209,25 +213,27 @@ class TransactionBackgroundTasks:
                 notification_type=NotificationType.TRANSACTION_SUCCESS,
                 message=f"Received ₹{credit_txn.amount / 100} from account {debit_account.account_number}. New balance: ₹{credit_account.balance / 100}",
                 reference_id=credit_txn.id,
-                reference_type="transaction"
+                reference_type="transaction",
             )
         except Exception as e:
-            logger.error(f"Failed to send success notification to receiver {credit_account.user_id}: {e}")
-        
-        # High-value transaction alert to admins (e.g., > 100,000 Rupees = 10,000,000 Paise)
+            logger.error(
+                f"Notification Error - Type=Success_Receiver | "
+                f"UserID={credit_account.user_id} | "
+                f"Error={str(e)}"
+            )
+
         if debit_txn.amount > 100000 * 100:
             try:
-                # Get all admin users in both tenants
                 admin_query = select(User).where(
                     and_(
                         User.role.in_(["ADMIN"]),
                         User.tenant_id.in_([debit_txn.tenant_id, credit_txn.tenant_id]),
-                        User.is_active == True
+                        User.is_active == True,
                     )
                 )
                 result = await db.execute(admin_query)
                 admins = list(result.scalars().all())
-                
+
                 for admin in admins:
                     try:
                         await NotificationService.create_notification(
@@ -237,9 +243,15 @@ class TransactionBackgroundTasks:
                             notification_type=NotificationType.HIGH_VALUE_TRANSACTION,
                             message=f"High-value transfer of ₹{debit_txn.amount / 100} from {debit_account.account_number} to {credit_account.account_number}",
                             reference_id=debit_txn.id,
-                            reference_type="transaction"
+                            reference_type="transaction",
                         )
                     except Exception as e:
-                        logger.error(f"Failed to send high-value notification to admin {admin.id}: {e}")
+                        logger.error(
+                            f"Notification Error - Type=HighValue_Admin | "
+                            f"AdminID={admin.id} | "
+                            f"Error={str(e)}"
+                        )
             except Exception as e:
-                logger.error(f"Failed to process high-value notifications: {e}")
+                logger.error(
+                    f"Notification Batch Error - Type=HighValue | Error={str(e)}"
+                )

@@ -21,60 +21,45 @@ class InterestRule(BaseModel):
         UUID(as_uuid=True),
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     rule_type: Mapped[RuleType] = mapped_column(
         SQLEnum(RuleType, name="rule_type_enum", create_constraint=True),
         nullable=False,
-        index=True
+        index=True,
     )
 
     account_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("account_types.id", ondelete="CASCADE"),
         nullable=True,
-        index=True
+        index=True,
     )
 
     loan_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("loan_types.id", ondelete="CASCADE"),
         nullable=True,
-        index=True
+        index=True,
     )
 
-    min_balance: Mapped[int | None] = mapped_column(
-        Numeric(20, 0),  
-        nullable=True
-    )
+    min_balance: Mapped[int | None] = mapped_column(Numeric(20, 0), nullable=True)
 
-    max_balance: Mapped[int | None] = mapped_column(
-        Numeric(20, 0),  
-        nullable=True
-    )
+    max_balance: Mapped[int | None] = mapped_column(Numeric(20, 0), nullable=True)
 
-    interest_rate: Mapped[Decimal] = mapped_column(
-        Numeric(5, 2),
-        nullable=False
-    )
+    interest_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
 
     tenant: Mapped["Tenant"] = relationship(
-        "Tenant",
-        back_populates="interest_rules",
-        lazy="selectin"
+        "Tenant", back_populates="interest_rules", lazy="selectin"
     )
 
     account_type: Mapped["AccountType | None"] = relationship(
-        "AccountType",
-        back_populates="interest_rules",
-        lazy="selectin"
+        "AccountType", back_populates="interest_rules", lazy="selectin"
     )
 
     loan_type: Mapped["LoanType | None"] = relationship(
-        "LoanType",
-        back_populates="interest_rules",
-        lazy="selectin"
+        "LoanType", back_populates="interest_rules", lazy="selectin"
     )
 
     def __repr__(self) -> str:

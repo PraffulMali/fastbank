@@ -9,16 +9,13 @@ from app.schemas.notification import (
     NotificationResponse,
     NotificationListResponse,
     UnreadCountResponse,
-    MarkAsReadRequest
+    MarkAsReadRequest,
 )
 from app.services.notification_service import NotificationService
 from app.dependencies import get_current_user, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
-router = APIRouter(
-    prefix="/notifications",
-    tags=["Notifications"]
-)
+router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 
 @router.get("/", response_model=Page[NotificationResponse])
@@ -26,7 +23,9 @@ async def list_notifications(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
-    unread_only: bool = Query(False, description="Filter for unread notifications only")
+    unread_only: bool = Query(
+        False, description="Filter for unread notifications only"
+    ),
 ):
     return await NotificationService.get_user_notifications(
         db, current_user.id, paginator, unread_only
@@ -36,7 +35,7 @@ async def list_notifications(
 @router.get("/unread-count", response_model=UnreadCountResponse)
 async def get_unread_count(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_tenant_member)]
+    current_user: Annotated[User, Depends(require_tenant_member)],
 ):
     count = await NotificationService.get_unread_count(db, current_user.id)
     return UnreadCountResponse(unread_count=count)
@@ -46,59 +45,48 @@ async def get_unread_count(
 async def mark_notification_as_read(
     notification_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_tenant_member)]
+    current_user: Annotated[User, Depends(require_tenant_member)],
 ):
     try:
         notification = await NotificationService.mark_as_read(
             db, notification_id, current_user.id
         )
-        
+
         if not notification:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Notification not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
             )
-        
+
         return notification
-    
+
     except PermissionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.post("/mark-all-read", status_code=status.HTTP_200_OK)
 async def mark_all_as_read(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_tenant_member)]
+    current_user: Annotated[User, Depends(require_tenant_member)],
 ):
     count = await NotificationService.mark_all_as_read(db, current_user.id)
-    return {
-        "message": f"Marked {count} notification(s) as read",
-        "count": count
-    }
+    return {"message": f"Marked {count} notification(s) as read", "count": count}
 
 
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_notification(
     notification_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_tenant_member)]
+    current_user: Annotated[User, Depends(require_tenant_member)],
 ):
     try:
         deleted = await NotificationService.delete_notification(
             db, notification_id, current_user.id
         )
-        
+
         if not deleted:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Notification not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
             )
-    
+
     except PermissionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

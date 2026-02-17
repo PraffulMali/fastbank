@@ -2,12 +2,9 @@ from enum import Enum
 
 
 class UserRole(str, Enum):
-    SUPER_ADMIN = "SUPER_ADMIN" 
-    ADMIN = "ADMIN"             
+    SUPER_ADMIN = "SUPER_ADMIN"
+    ADMIN = "ADMIN"
     USER = "USER"
-
-
-
 
 
 class TransactionType(str, Enum):
@@ -22,8 +19,8 @@ class TransactionStatus(str, Enum):
 
 
 class ReferenceType(str, Enum):
-    TRANSFER = "TRANSFER"  
-    LOAN = "LOAN"          
+    TRANSFER = "TRANSFER"
+    LOAN = "LOAN"
     SYSTEM = "SYSTEM"
     CASH = "CASH"
 
@@ -37,13 +34,15 @@ class NotificationType(str, Enum):
     LOAN_DISBURSED = "LOAN_DISBURSED"
     HIGH_VALUE_TRANSACTION = "HIGH_VALUE_TRANSACTION"
     SYSTEM_ALERT = "SYSTEM_ALERT"
-    
+
+
 class LoanStatus(str, Enum):
     APPLIED = "APPLIED"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
-    CLOSED = "CLOSED"  
-    FORECLOSED = "FORECLOSED" 
+    CLOSED = "CLOSED"
+    FORECLOSED = "FORECLOSED"
+
 
 class RuleType(str, Enum):
     ACCOUNT = "ACCOUNT"

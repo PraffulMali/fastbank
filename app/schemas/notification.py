@@ -15,7 +15,7 @@ class NotificationResponse(BaseModel):
     is_read: bool
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -23,7 +23,7 @@ class NotificationListResponse(BaseModel):
     notifications: list[NotificationResponse]
     total: int
     unread_count: int
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 

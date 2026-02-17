@@ -1,100 +1,12 @@
-# """
-# Email Service for sending emails to users.
-# This is a basic implementation. In production, you should use a proper email service
-# like SendGrid, AWS SES, or similar.
-# """
-# import logging
-# from typing import Optional
-
-# logger = logging.getLogger(__name__)
-
-
-# class EmailService:
-#     """
-#     Service for sending emails.
-#     Currently logs emails instead of sending them.
-#     """
-    
-#     @staticmethod
-#     async def send_email(
-#         to_email: str,
-#         subject: str,
-#         body: str,
-#         html_body: Optional[str] = None
-#     ) -> bool:
-#         """
-#         Send an email to a user.
-        
-#         Args:
-#             to_email: Recipient email address
-#             subject: Email subject
-#             body: Plain text email body
-#             html_body: Optional HTML email body
-            
-#         Returns:
-#             True if email was sent successfully, False otherwise
-#         """
-#         try:
-#             logger.info(f"[EMAIL] To: {to_email}")
-#             logger.info(f"[EMAIL] Subject: {subject}")
-#             logger.info(f"[EMAIL] Body: {body}")
-            
-#             # In production, you would use something like:
-#             # await send_via_sendgrid(to_email, subject, body, html_body)
-#             # or
-#             # await send_via_aws_ses(to_email, subject, body, html_body)
-            
-#             return True
-#         except Exception as e:
-#             logger.error(f"Failed to send email to {to_email}: {str(e)}")
-#             return False
-    
-#     @staticmethod
-#     async def send_emi_failure_email(
-#         to_email: str,
-#         user_name: str,
-#         loan_amount: float,
-#         emi_amount: float,
-#         account_balance: float,
-#         due_date: str
-#     ) -> bool:
-#         """
-#         Send EMI payment failure notification email.
-#         """
-#         subject = "EMI Payment Failed - Insufficient Funds"
-        
-#         body = f"""
-# Dear {user_name},
-
-# We attempted to deduct your EMI payment of ₹{emi_amount:,.2f} on {due_date}, but the transaction could not be completed due to insufficient funds in your account.
-
-# Loan Details:
-# - Loan Amount: ₹{loan_amount:,.2f}
-# - EMI Amount: ₹{emi_amount:,.2f}
-# - Current Account Balance: ₹{account_balance:,.2f}
-# - Required Amount: ₹{emi_amount:,.2f}
-# - Shortfall: ₹{(emi_amount - account_balance):,.2f}
-
-# Please ensure sufficient funds are available in your account to avoid late payment charges and maintain your credit score.
-
-# You can add funds to your account and the system will attempt the deduction again next month.
-
-# If you have any questions, please contact our support team.
-
-# Best regards,
-# FastBank Team
-#         """.strip()
-        
-#         return await EmailService.send_email(to_email, subject, body)
-
-
-
 import logging
 from typing import Optional
 import aiosmtplib
 from email.message import EmailMessage
 
 from app.config.settings import settings
+from app.database.redis import get_redis
+from app.utils.security import hash_token
+from app.templates.email_templates import EmailTemplates
 
 logger = logging.getLogger(__name__)
 
@@ -103,10 +15,7 @@ class EmailService:
 
     @staticmethod
     async def send_email(
-        to_email: str,
-        subject: str,
-        body: str,
-        html_body: Optional[str] = None
+        to_email: str, subject: str, body: str, html_body: Optional[str] = None
     ) -> bool:
 
         try:
@@ -120,7 +29,6 @@ class EmailService:
             if html_body:
                 message.add_alternative(html_body, subtype="html")
 
-            # ✅ PRODUCTION SMTP
             if settings.SMTP_USER and settings.SMTP_PASSWORD:
 
                 await aiosmtplib.send(
@@ -133,20 +41,56 @@ class EmailService:
                     start_tls=True if settings.SMTP_PORT == 587 else False,
                 )
 
-                logger.info(f"Email successfully sent to {to_email}")
+                logger.info("Email Sent - Status=Success")
 
             else:
-                # ✅ DEVELOPMENT FALLBACK
-                logger.info("SMTP not configured — logging email instead")
-                logger.info(f"[EMAIL] To: {to_email}")
-                logger.info(f"[EMAIL] Subject: {subject}")
-                logger.info(f"[EMAIL] Body: {body}")
+                logger.info("Email Logged - Status=SMTP_Not_Configured")
 
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {str(e)}")
+            logger.error(f"Email Failed - Status=Error | Error={str(e)}")
             return False
+
+    @staticmethod
+    async def send_verification_email(
+        email: str, token: str, temp_password: str, user_id: str
+    ):
+        hashed_token = hash_token(token)
+        redis = await get_redis()
+        await redis.setex(f"verify_token:{hashed_token}", 900, str(user_id))
+
+        verify_link = f"{settings.FRONTEND_URL}/verify?token={token}"
+        subject, content = EmailTemplates.get_verification_email(
+            "", verify_link, temp_password
+        )
+
+        await EmailService.send_email(email, subject, content)
+        logger.info("Verification Email Sent - Type=Task_Completed")
+
+    @staticmethod
+    async def send_password_reset_email(email: str, token: str, user_id: str):
+        hashed_token = hash_token(token)
+        redis = await get_redis()
+        await redis.setex(f"reset_token:{hashed_token}", 900, str(user_id))
+
+        reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+        subject, content = EmailTemplates.get_password_reset_email(reset_link)
+
+        await EmailService.send_email(email, subject, content)
+        logger.info("Password Reset Email Sent - Status=Success")
+
+    @staticmethod
+    async def send_verification_resend_email(email: str, token: str, user_id: str):
+        hashed_token = hash_token(token)
+        redis = await get_redis()
+        await redis.setex(f"verify_token:{hashed_token}", 900, str(user_id))
+
+        verify_link = f"{settings.FRONTEND_URL}/verify?token={token}"
+        subject, content = EmailTemplates.get_verification_resend_email(verify_link)
+
+        await EmailService.send_email(email, subject, content)
+        logger.info("Verification Resend Email Sent - Status=Success")
 
     @staticmethod
     async def send_emi_failure_email(
@@ -155,33 +99,18 @@ class EmailService:
         loan_amount: float,
         emi_amount: float,
         account_balance: float,
-        due_date: str
+        due_date: str,
     ) -> bool:
+        subject, body = EmailTemplates.get_emi_failure_email(
+            user_name, loan_amount, emi_amount, account_balance, due_date
+        )
+        return await EmailService.send_email(to_email, subject, body)
 
-        subject = "EMI Payment Failed - Insufficient Funds"
-
-        shortfall = emi_amount - account_balance
-
-        body = f"""
-Dear {user_name},
-
-We attempted to deduct your EMI payment of ₹{emi_amount:,.2f} on {due_date}, but the transaction could not be completed due to insufficient funds in your account.
-
-Loan Details:
-- Loan Amount: ₹{loan_amount:,.2f}
-- EMI Amount: ₹{emi_amount:,.2f}
-- Current Account Balance: ₹{account_balance:,.2f}
-- Required Amount: ₹{emi_amount:,.2f}
-- Shortfall: ₹{shortfall:,.2f}
-
-Please ensure sufficient funds are available in your account to avoid late payment charges and maintain your credit score.
-
-You can add funds to your account and the system will attempt the deduction again next month.
-
-If you have any questions, please contact our support team.
-
-Best regards,
-FastBank Team
-        """.strip()
-
+    @staticmethod
+    async def send_advance_repayment_failure_email(
+        to_email: str, user_name: str, payment_amount: float, account_balance: float
+    ) -> bool:
+        subject, body = EmailTemplates.get_advance_repayment_failure_email(
+            user_name, payment_amount, account_balance
+        )
         return await EmailService.send_email(to_email, subject, body)

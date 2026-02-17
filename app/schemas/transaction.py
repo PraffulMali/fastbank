@@ -9,7 +9,7 @@ class TransferRequest(BaseModel):
     source_account_number: str = Field(..., min_length=15, max_length=20)
     destination_account_number: str = Field(..., min_length=15, max_length=20)
     amount: Decimal = Field(..., gt=0, decimal_places=2)
-    
+
     @field_validator("amount")
     def validate_amount(cls, v: Decimal) -> Decimal:
         if v <= 0:
@@ -22,7 +22,7 @@ class TransferRequest(BaseModel):
 class DepositRequest(BaseModel):
     account_id: uuid.UUID
     amount: Decimal = Field(..., gt=0, decimal_places=2)
-    
+
     @field_validator("amount")
     def validate_amount(cls, v: Decimal) -> Decimal:
         if v <= 0:
@@ -42,7 +42,7 @@ class TransactionResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("amount", mode="before")
@@ -56,7 +56,7 @@ class CounterpartyInfo(BaseModel):
     tenant_id: uuid.UUID
     account_number: str
     user_name: str
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -73,7 +73,7 @@ class TransactionDetailResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     counterparty: Optional[CounterpartyInfo] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("amount", mode="before")
@@ -87,5 +87,5 @@ class TransferResponse(BaseModel):
     reference_id: uuid.UUID
     debit_transaction: TransactionResponse
     credit_transaction: TransactionResponse
-    
+
     model_config = ConfigDict(from_attributes=True)
