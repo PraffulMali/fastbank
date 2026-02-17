@@ -1,6 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from app.constants import APP_NAME
+from fastapi_limiter import FastAPILimiter
+from fastapi_limiter.depends import RateLimiter
+from app.constants import APP_NAME, RATE_LIMIT_TIMES, RATE_LIMIT_WINDOW_SECONDS
 from app.routers import (
     auth,
     tenant,
@@ -18,11 +20,13 @@ from app.celery.app import celery_app
 from app.database.redis import get_redis, close_redis
 from contextlib import asynccontextmanager
 from app.utils.logger import setup_logging
+from app.middleware.logging import log_requests
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await get_redis()
+    redis_client = await get_redis()
+    await FastAPILimiter.init(redis_client)
     yield
     await close_redis()
 
@@ -35,8 +39,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-
-from app.middleware.logging import log_requests
 
 app.middleware("http")(log_requests)
 
@@ -62,7 +64,12 @@ app.include_router(interest_rule.router)
 app.include_router(ws_router.router)
 
 
-@app.get("/")
+@app.get(
+    "/",
+    dependencies=[
+        Depends(RateLimiter(times=RATE_LIMIT_TIMES, seconds=RATE_LIMIT_WINDOW_SECONDS))
+    ],
+)
 async def root():
     return {
         "message": "Welcome to FastBank API",
@@ -76,6 +83,11 @@ async def root():
     }
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    dependencies=[
+        Depends(RateLimiter(times=RATE_LIMIT_TIMES, seconds=RATE_LIMIT_WINDOW_SECONDS))
+    ],
+)
 async def health_check():
     return {"status": "healthy", "service": "FastBank API"}
