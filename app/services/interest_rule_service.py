@@ -230,6 +230,8 @@ class InterestRuleService:
         result = await db.execute(rules_query)
         rules = result.scalars().all()
 
+        processed_account_ids = set()
+
         for rule in rules:
             stmt = select(Account).where(
                 and_(
@@ -249,6 +251,10 @@ class InterestRuleService:
             accounts = acc_result.scalars().all()
 
             for account in accounts:
+                if account.id in processed_account_ids:
+                    continue
+
+                processed_account_ids.add(account.id)
                 stats["processed"] += 1
                 try:
                     async with db.begin_nested():
