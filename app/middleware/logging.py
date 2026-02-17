@@ -6,9 +6,10 @@ from app.utils.jwt import decode_access_token
 
 logger = logging.getLogger(__name__)
 
+
 async def log_requests(request: Request, call_next):
     start_time = time.time()
-    
+
     tenant_id = "N/A"
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
@@ -16,11 +17,13 @@ async def log_requests(request: Request, call_next):
         payload = decode_access_token(token)
         if payload:
             tenant_id = payload.get("tenant_id", "N/A")
-    
+
     if tenant_id == "N/A":
         tenant_id = request.headers.get("X-Tenant-ID", "N/A")
 
-    logger.info(f"Incoming Request - TenantID={tenant_id} | Method={request.method} | Path={request.url.path}")
+    logger.info(
+        f"Incoming Request - TenantID={tenant_id} | Method={request.method} | Path={request.url.path}"
+    )
 
     try:
         response = await call_next(request)

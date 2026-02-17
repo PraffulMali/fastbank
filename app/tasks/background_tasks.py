@@ -55,7 +55,9 @@ class TransactionBackgroundTasks:
                         debit_txn.status != TransactionStatus.PENDING
                         or credit_txn.status != TransactionStatus.PENDING
                     ):
-                        logger.warning(f"Transfer Skipped - Status=Not_Pending | ReferenceID={reference_id}")
+                        logger.warning(
+                            f"Transfer Skipped - Status=Not_Pending | ReferenceID={reference_id}"
+                        )
                         return
 
                     debit_account = (
@@ -75,14 +77,18 @@ class TransactionBackgroundTasks:
                     ).scalar_one()
 
                     if not debit_account or not credit_account:
-                        logger.error(f"Transfer Error - Reason=AccountNotFound | ReferenceID={reference_id}")
+                        logger.error(
+                            f"Transfer Error - Reason=AccountNotFound | ReferenceID={reference_id}"
+                        )
 
                         debit_txn.status = TransactionStatus.FAILED
                         credit_txn.status = TransactionStatus.FAILED
                         return
 
                     if debit_account.balance < debit_txn.amount:
-                        logger.error(f"Transfer Error - Reason=InsufficientBalance | ReferenceID={reference_id}")
+                        logger.error(
+                            f"Transfer Error - Reason=InsufficientBalance | ReferenceID={reference_id}"
+                        )
 
                         debit_txn.status = TransactionStatus.FAILED
                         credit_txn.status = TransactionStatus.FAILED
@@ -94,7 +100,9 @@ class TransactionBackgroundTasks:
                     debit_txn.status = TransactionStatus.SUCCESS
                     credit_txn.status = TransactionStatus.SUCCESS
 
-                logger.info(f"Transfer Success - Status=Completed | ReferenceID={reference_id}")
+                logger.info(
+                    f"Transfer Success - Status=Completed | ReferenceID={reference_id}"
+                )
 
                 await db.refresh(debit_txn)
                 await db.refresh(credit_txn)
@@ -106,7 +114,9 @@ class TransactionBackgroundTasks:
                 )
 
             except Exception as e:
-                logger.error(f"Transfer Error - ReferenceID={reference_id} | Error={str(e)}")
+                logger.error(
+                    f"Transfer Error - ReferenceID={reference_id} | Error={str(e)}"
+                )
 
                 await db.rollback()
 
@@ -153,7 +163,9 @@ class TransactionBackgroundTasks:
         await db.refresh(debit_txn)
         await db.refresh(credit_txn)
 
-        logger.info(f"Transfer Failed - Status=Marked_Failed | ReferenceID={debit_txn.reference_id} | Reason={reason}")
+        logger.info(
+            f"Transfer Failed - Status=Marked_Failed | ReferenceID={debit_txn.reference_id} | Reason={reason}"
+        )
 
         debit_account = await db.get(Account, debit_txn.account_id)
 
@@ -240,4 +252,6 @@ class TransactionBackgroundTasks:
                             f"Error={str(e)}"
                         )
             except Exception as e:
-                logger.error(f"Notification Batch Error - Type=HighValue | Error={str(e)}")
+                logger.error(
+                    f"Notification Batch Error - Type=HighValue | Error={str(e)}"
+                )

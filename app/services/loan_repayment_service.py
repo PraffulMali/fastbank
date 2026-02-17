@@ -34,6 +34,14 @@ class LoanRepaymentService:
         annual_interest_rate: Decimal,
         tenure_months: int,
     ) -> Tuple[int, int]:
+        """
+        Calculate the EMI split into principal and interest components.
+
+        Formula:
+            monthly_rate = annual_interest_rate / 12 / 100
+            interest_component = remaining_principal × monthly_rate
+            principal_component = emi_amount − interest_component
+        """
         monthly_rate = annual_interest_rate / Decimal("12") / Decimal("100")
         interest_component = int(Decimal(remaining_principal) * monthly_rate)
 
@@ -44,84 +52,6 @@ class LoanRepaymentService:
             interest_component = emi_amount - principal_component
 
         return (principal_component, interest_component)
-
-    @staticmethod
-    async def process_emi_deduction(db: AsyncSession, loan: Loan) -> Tuple[bool, str]:
-        account = await db.get(Account, loan.account_id)
-        if not account:
-            return (False, f"Account not found for loan {loan.id}")
-
-        user = await db.get(User, loan.user_id)
-        if not user:
-            return (False, f"User not found for loan {loan.id}")
-
-        if account.balance < loan.emi_amount:
-            shortfall = loan.emi_amount - account.balance
-            logger.warning(
-                f"EMI Deduction Failed - Reason=InsufficientFunds | "
-                f"LoanID={loan.id} | "
-                f"RequiredAmount={loan.emi_amount / 100} | "
-                f"AvailableBalance={account.balance / 100}"
-            )
-            return (
-                False,
-                f"Insufficient funds. Required: ₹{loan.emi_amount / 100:,.2f}, Available: ₹{account.balance / 100:,.2f}",
-            )
-
-        principal_component, interest_component = (
-            LoanRepaymentService.calculate_emi_split(
-                emi_amount=loan.emi_amount,
-                remaining_principal=loan.remaining_principal,
-                annual_interest_rate=loan.interest_rate,
-                tenure_months=loan.tenure_months,
-            )
-        )
-
-        emi_transaction = Transaction(
-            tenant_id=loan.tenant_id,
-            account_id=loan.account_id,
-            reference_id=loan.id,
-            transaction_type=TransactionType.DEBIT,
-            reference_type=ReferenceType.LOAN,
-            amount=loan.emi_amount,
-            status=TransactionStatus.SUCCESS,
-        )
-
-        db.add(emi_transaction)
-
-        account.balance -= loan.emi_amount
-
-        loan.remaining_principal -= principal_component
-
-        if loan.remaining_principal < 0:
-            loan.remaining_principal = 0
-
-        await db.flush()
-
-        repayment = LoanRepayment(
-            tenant_id=loan.tenant_id,
-            loan_id=loan.id,
-            transaction_id=emi_transaction.id,
-            amount_paid=loan.emi_amount,
-            principal_component=principal_component,
-            interest_component=interest_component,
-            payment_date=datetime.now(timezone.utc),
-            status=TransactionStatus.SUCCESS,
-        )
-
-        db.add(repayment)
-        await db.flush()
-
-        logger.info(
-            f"EMI Deducted - Status=Success | "
-            f"LoanID={loan.id} | "
-            f"AmountPaid={loan.emi_amount / 100} | "
-            f"PrincipalComponent={principal_component / 100} | "
-            f"InterestComponent={interest_component / 100} | "
-            f"RemainingPrincipal={loan.remaining_principal / 100}"
-        )
-
-        return (True, f"EMI of ₹{loan.emi_amount / 100:,.2f} deducted successfully")
 
     @staticmethod
     async def process_monthly_emis(db: AsyncSession) -> dict:
@@ -293,7 +223,9 @@ class LoanRepaymentService:
             except Exception as e:
                 stats["failed"] += 1
                 stats["errors"].append({"loan_id": str(loan.id), "message": str(e)})
-                logger.error(f"EMI Processing Error - LoanID={loan.id} | Error={str(e)}")
+                logger.error(
+                    f"EMI Processing Error - LoanID={loan.id} | Error={str(e)}"
+                )
 
         logger.info(
             f"Monthly EMI Processing Complete - "

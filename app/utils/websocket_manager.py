@@ -46,7 +46,9 @@ class ConnectionManager:
                 try:
                     await connection.send_json(message)
                 except Exception as e:
-                    logger.error(f"WebSocket Send Error - UserID={user_id} | Error={str(e)}")
+                    logger.error(
+                        f"WebSocket Send Error - UserID={user_id} | Error={str(e)}"
+                    )
                     disconnected.append(connection)
 
             for dead_connection in disconnected:

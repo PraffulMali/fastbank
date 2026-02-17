@@ -60,7 +60,9 @@ class LoanService:
         db: AsyncSession, loan_in: LoanCreate, user_id: uuid.UUID, tenant_id: uuid.UUID
     ) -> Loan:
         if loan_in.principal_amount < MIN_LOAN_AMOUNT:
-            logger.error(f"Loan Application Failed - TenantID={tenant_id} | UserID={user_id} | Reason=AmountBelowMinimum | Amount={loan_in.principal_amount}")
+            logger.error(
+                f"Loan Application Failed - TenantID={tenant_id} | UserID={user_id} | Reason=AmountBelowMinimum | Amount={loan_in.principal_amount}"
+            )
             raise ValueError(f"Loan amount must be at least ₹{MIN_LOAN_AMOUNT:,.2f}")
 
         if loan_in.principal_amount > MAX_LOAN_AMOUNT:
@@ -145,7 +147,9 @@ class LoanService:
             applied_at=datetime.now(timezone.utc),
         )
 
-        logger.info(f"Loan Applied - TenantID={tenant_id} | UserID={user_id} | LoanTypeID={loan_in.loan_type_id} | Amount={principal_paisa}")
+        logger.info(
+            f"Loan Applied - TenantID={tenant_id} | UserID={user_id} | LoanTypeID={loan_in.loan_type_id} | Amount={principal_paisa}"
+        )
 
         db.add(new_loan)
         await db.commit()
@@ -256,7 +260,9 @@ class LoanService:
             loan.decided_at = datetime.now(timezone.utc)
             loan.rejection_reason = decision.rejection_reason
 
-        logger.info(f"Loan {decision.decision.capitalize()} - TenantID={tenant_id} | LoanID={loan.id} | AdminID={admin_id} | Amount={loan.principal_amount}")
+        logger.info(
+            f"Loan {decision.decision.capitalize()} - TenantID={tenant_id} | LoanID={loan.id} | AdminID={admin_id} | Amount={loan.principal_amount}"
+        )
 
         await db.commit()
         await db.refresh(loan)

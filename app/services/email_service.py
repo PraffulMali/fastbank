@@ -63,7 +63,7 @@ class EmailService:
         verify_link = f"{settings.FRONTEND_URL}/verify?token={token}"
         subject, content = EmailTemplates.get_verification_email(
             "", verify_link, temp_password
-        )  # username unknown here, kept generic
+        )
 
         await EmailService.send_email(email, subject, content)
         logger.info("Verification Email Sent - Type=Task_Completed")

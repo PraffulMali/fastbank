@@ -58,7 +58,9 @@ async def websocket_endpoint(
                 break
 
     except WebSocketDisconnect:
-        logger.info(f"WebSocket Disconnect Event - UserID={user.id if user else 'Unknown'}")
+        logger.info(
+            f"WebSocket Disconnect Event - UserID={user.id if user else 'Unknown'}"
+        )
         if user:
             manager.disconnect(websocket, user.id)
 

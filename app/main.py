@@ -18,11 +18,13 @@ from app.database.redis import get_redis, close_redis
 from contextlib import asynccontextmanager
 from app.utils.logger import setup_logging
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await get_redis()
     yield
     await close_redis()
+
 
 setup_logging()
 
@@ -34,6 +36,7 @@ app = FastAPI(
 )
 
 from app.middleware.logging import log_requests
+
 app.middleware("http")(log_requests)
 
 app.add_middleware(

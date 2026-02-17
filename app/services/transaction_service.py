@@ -50,7 +50,9 @@ class TransactionService:
         source_account = source_result.scalar_one_or_none()
 
         if not source_account:
-            logger.error(f"Transfer Failed - TenantID={current_user.tenant_id} | UserID={current_user.id} | Reason=SourceAccountNotFound | AccountNumber={transfer_request.source_account_number}")
+            logger.error(
+                f"Transfer Failed - TenantID={current_user.tenant_id} | UserID={current_user.id} | Reason=SourceAccountNotFound | AccountNumber={transfer_request.source_account_number}"
+            )
             raise ValueError("Source account not found or inactive")
 
         if source_account.user_id != current_user.id:
@@ -60,7 +62,9 @@ class TransactionService:
 
         if source_account.balance < amount_in_paise:
             balance_in_rupees = source_account.balance / 100
-            logger.error(f"Transfer Failed - TenantID={source_account.tenant_id} | AccountID={source_account.id} | Reason=InsufficientBalance | Amount={amount_in_paise}")
+            logger.error(
+                f"Transfer Failed - TenantID={source_account.tenant_id} | AccountID={source_account.id} | Reason=InsufficientBalance | Amount={amount_in_paise}"
+            )
             raise ValueError(f"Insufficient balance. Available: ₹{balance_in_rupees}")
 
         dest_query = select(Account).where(
@@ -109,9 +113,13 @@ class TransactionService:
         await db.refresh(debit_transaction)
         await db.refresh(credit_transaction)
 
-        background_tasks.add_task(TransactionBackgroundTasks.process_transfer, reference_id)
+        background_tasks.add_task(
+            TransactionBackgroundTasks.process_transfer, reference_id
+        )
 
-        logger.info(f"Transfer Initiated - TenantID={source_account.tenant_id} | AccountID={source_account.id} | DestAccountID={dest_account.id} | Amount={amount_in_paise}")
+        logger.info(
+            f"Transfer Initiated - TenantID={source_account.tenant_id} | AccountID={source_account.id} | DestAccountID={dest_account.id} | Amount={amount_in_paise}"
+        )
 
         return debit_transaction, credit_transaction, reference_id
 

@@ -39,7 +39,7 @@ class AdvanceLoanRepaymentService:
 
         Args:
             remaining_principal: Remaining principal in paisa
-            annual_interest_rate: Annual interest rate (e.g., 12.00 for 12%)
+            annual_interest_rate: Annual interest rate
 
         Returns:
             Interest amount in paisa
@@ -205,7 +205,9 @@ class AdvanceLoanRepaymentService:
                 if calculated_tenure is not None:
                     new_tenure = calculated_tenure
                 else:
-                    logger.warning(f"Tenure Recalculation Skipped - Status=Failed | LoanID={loan_id}")
+                    logger.warning(
+                        f"Tenure Recalculation Skipped - Status=Failed | LoanID={loan_id}"
+                    )
                     new_tenure = loan.tenure_months
 
             transaction_id = None
