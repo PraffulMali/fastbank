@@ -38,37 +38,25 @@ class InterestRuleService:
             if not account_type.is_active:
                 raise ValueError("Cannot create rule for inactive account type")
 
-            overlap_query = select(InterestRule).where(
-                and_(
-                    InterestRule.account_type_id == rule_in.account_type_id,
-                    InterestRule.is_active == True,
-                    or_(
-                        and_(
-                            InterestRule.min_balance <= int(rule_in.min_balance * 100),
-                            or_(
-                                InterestRule.max_balance.is_(None),
-                                InterestRule.max_balance
-                                >= int(rule_in.min_balance * 100),
-                            ),
-                        ),
-                        and_(
-                            rule_in.max_balance is not None,
-                            InterestRule.min_balance <= int(rule_in.max_balance * 100),
-                            or_(
-                                InterestRule.max_balance.is_(None),
-                                InterestRule.max_balance
-                                >= int(rule_in.max_balance * 100),
-                            ),
-                        ),
-                        and_(
-                            InterestRule.min_balance >= int(rule_in.min_balance * 100),
-                            rule_in.max_balance is None,
-                        ),
-                    ),
+            min_a = int(rule_in.min_balance * 100)
+            max_a = int(rule_in.max_balance * 100) if rule_in.max_balance is not None else None
+
+            conditions = [
+                InterestRule.account_type_id == rule_in.account_type_id,
+                InterestRule.is_active == True,
+            ]
+            if max_a is not None:
+                conditions.append(InterestRule.min_balance <= max_a)
+            conditions.append(
+                or_(
+                    InterestRule.max_balance.is_(None),
+                    InterestRule.max_balance >= min_a
                 )
             )
+
+            overlap_query = select(InterestRule).where(and_(*conditions))
             result = await db.execute(overlap_query)
-            if result.scalar_one_or_none():
+            if result.scalars().first():
                 raise ValueError(
                     "Balance range overlaps with existing interest rule for this account type"
                 )
@@ -89,7 +77,7 @@ class InterestRuleService:
                 )
             )
             result = await db.execute(existing_query)
-            if result.scalar_one_or_none():
+            if result.scalars().first():
                 raise ValueError(
                     "Interest rule already exists for this loan type. Update existing rule instead."
                 )
@@ -148,7 +136,52 @@ class InterestRuleService:
         if rule.tenant_id != tenant_id:
             raise PermissionError("Cannot update interest rule from different tenant")
 
-        rule.interest_rate = rule_update.interest_rate
+        update_data = rule_update.model_dump(exclude_unset=True)
+
+        if rule.rule_type == RuleType.LOAN:
+            if "min_balance" in update_data or "max_balance" in update_data:
+                raise ValueError("Cannot update balance limits for LOAN rules")
+
+        if "interest_rate" in update_data:
+            rule.interest_rate = update_data["interest_rate"]
+        
+        if rule.rule_type == RuleType.ACCOUNT:
+            if "min_balance" in update_data:
+                 val = update_data["min_balance"]
+                 rule.min_balance = int(val * 100) if val is not None else None
+            
+            if "max_balance" in update_data:
+                val = update_data["max_balance"]
+                rule.max_balance = int(val * 100) if val is not None else None
+
+            min_val = rule.min_balance if rule.min_balance is not None else 0
+            if rule.max_balance is not None:
+                if rule.max_balance <= min_val:
+                     raise ValueError("max_balance must be greater than min_balance")
+
+            
+            conditions = [
+                InterestRule.id != rule.id,
+                InterestRule.account_type_id == rule.account_type_id,
+                InterestRule.is_active == True,
+            ]
+            
+            if rule.max_balance is not None:
+                conditions.append(InterestRule.min_balance <= rule.max_balance)
+            
+            conditions.append(
+                or_(
+                    InterestRule.max_balance.is_(None),
+                    InterestRule.max_balance >= min_val
+                )
+            )
+            
+            overlap_query = select(InterestRule).where(and_(*conditions))
+            result = await db.execute(overlap_query)
+            if result.scalars().first():
+                raise ValueError(
+                    "Updated balance range overlaps with another existing interest rule"
+                )
 
         await db.commit()
         await db.refresh(rule)
@@ -185,6 +218,7 @@ class InterestRuleService:
             "success": 0,
             "failed": 0,
             "total_interest": Decimal(0),
+            "failures": []
         }
 
         rules_query = select(InterestRule).where(
@@ -265,6 +299,14 @@ class InterestRuleService:
 
                 except Exception as e:
                     stats["failed"] += 1
+
+                    stats["failures"].append({
+                        "account_id": account.id,
+                        "tenant_id": account.tenant_id,
+                        "error": str(e),
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    })
+
                     continue
 
         return stats

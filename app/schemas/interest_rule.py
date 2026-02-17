@@ -58,7 +58,22 @@ class InterestRuleCreate(BaseModel):
 
 
 class InterestRuleUpdate(BaseModel):
-    interest_rate: Decimal = Field(..., ge=0, le=100, decimal_places=2)
+    interest_rate: Optional[Decimal] = Field(
+        None, ge=0, le=100, decimal_places=2, description="Interest rate as percentage"
+    )
+    min_balance: Optional[Decimal] = Field(
+        None, ge=0, description="Minimum balance in rupees"
+    )
+    max_balance: Optional[Decimal] = Field(
+        None, ge=0, description="Maximum balance in rupees (NULL = unlimited)"
+    )
+
+    @model_validator(mode="after")
+    def validate_update_constraints(self):
+        if self.min_balance is not None and self.max_balance is not None:
+            if self.max_balance <= self.min_balance:
+                raise ValueError("max_balance must be greater than min_balance")
+        return self
 
 
 class TypeNameResponse(BaseModel):
@@ -88,5 +103,5 @@ class InterestRuleResponse(BaseModel):
         if v is None:
             return None
         if isinstance(v, (int, Decimal)):
-            return Decimal(v) / 100
+            return (Decimal(v) / 100).quantize(Decimal("0.01"))
         return v
