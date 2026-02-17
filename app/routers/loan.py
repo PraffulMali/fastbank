@@ -2,6 +2,7 @@ from typing import Annotated, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.database import get_db
 from app.models.user import User
@@ -16,6 +17,7 @@ from app.schemas.loan import (
     LoanRepaymentResponse,
 )
 from app.models.loan_repayment import LoanRepayment
+from app.models.loan import Loan
 from app.services.loan_service import LoanService
 from app.services.advance_loan_repayment_service import AdvanceLoanRepaymentService
 from app.dependencies import get_current_user, require_tenant_admin, require_user
@@ -61,8 +63,6 @@ async def list_loans(
     ),
     paginator: Paginator = Depends(),
 ):
-    from sqlalchemy import select
-    from app.models.loan import Loan
 
     query = select(Loan).where(Loan.tenant_id == current_user.tenant_id)
 
@@ -191,7 +191,6 @@ async def list_loan_repayments(
     current_user: Annotated[User, Depends(require_tenant_admin)],
     paginator: Paginator = Depends(),
 ):
-    from sqlalchemy import select
 
     loan = await LoanService.get_loan_by_id(db, loan_id)
     if not loan:
@@ -223,7 +222,6 @@ async def get_loan_repayment(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)],
 ):
-    from sqlalchemy import select
 
     loan = await LoanService.get_loan_by_id(db, loan_id)
     if not loan:

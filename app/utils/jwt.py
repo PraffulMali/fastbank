@@ -2,12 +2,17 @@ from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from uuid import uuid4
 from app.config.settings import settings
+from app.constants import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+    ALGORITHM,
+)
 
 
 def create_access_token(data: dict) -> tuple[str, str, int]:
     to_encode = data.copy()
 
-    exp_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    exp_delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     expire = datetime.now(timezone.utc) + exp_delta
     exp_timestamp = int(expire.timestamp())
     jti = str(uuid4())
@@ -21,9 +26,7 @@ def create_access_token(data: dict) -> tuple[str, str, int]:
         }
     )
 
-    encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
-    )
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt, jti, exp_timestamp
 
 
@@ -32,9 +35,7 @@ def create_refresh_token(
 ) -> str:
     to_encode = data.copy()
 
-    expire = datetime.now(timezone.utc) + timedelta(
-        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
-    )
+    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
     to_encode.update(
         {
@@ -50,17 +51,13 @@ def create_refresh_token(
     if access_exp:
         to_encode["access_exp"] = access_exp
 
-    encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
-    )
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
 def decode_access_token(token: str) -> dict:
     try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-        )
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except JWTError:
         return None

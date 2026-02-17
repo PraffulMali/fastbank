@@ -12,9 +12,7 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[uuid.UUID, List[WebSocket]] = {}
 
-    async def connect(
-        self, websocket: WebSocket, user_id: uuid.UUID, is_admin: bool = False
-    ):
+    async def connect(self, websocket: WebSocket, user_id: uuid.UUID):
         if user_id not in self.active_connections:
             self.active_connections[user_id] = []
 

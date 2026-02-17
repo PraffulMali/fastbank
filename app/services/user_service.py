@@ -26,6 +26,7 @@ from app.schemas.auth import UserLoginRequest, UserLoginResponse, TokenRefreshRe
 from app.utils.security import get_password_hash, verify_password, hash_token
 from app.utils.jwt import create_access_token, create_refresh_token
 from app.config.settings import settings
+from app.constants import ALGORITHM
 from app.database.redis import get_redis
 from app.services.account_service import AccountService
 from app.schemas.account import AccountCreateByAdmin
@@ -90,7 +91,7 @@ class UserService:
     ) -> TokenRefreshResponse:
         try:
             payload = jwt.decode(
-                refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+                refresh_token, settings.SECRET_KEY, algorithms=[ALGORITHM]
             )
 
             if payload.get("token_type") != "refresh":
@@ -441,12 +442,9 @@ class UserService:
 
     @staticmethod
     async def blacklist_token(token: str) -> bool:
-        from jose import jwt, JWTError
 
         try:
-            payload = jwt.decode(
-                token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-            )
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
             jti = payload.get("jti")
             exp = payload.get("exp")
 

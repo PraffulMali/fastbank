@@ -19,6 +19,7 @@ from app.services.email_service import EmailService
 from fastapi.security import HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from app.config.settings import settings
+from app.constants import ALGORITHM
 from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -60,7 +61,7 @@ async def refresh_token(
                 payload = jwt.decode(
                     credentials.credentials,
                     settings.SECRET_KEY,
-                    algorithms=[settings.ALGORITHM],
+                    algorithms=[ALGORITHM],
                     options={"verify_exp": False},
                 )
                 access_token_jti = payload.get("jti")

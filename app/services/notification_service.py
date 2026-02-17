@@ -1,7 +1,7 @@
 from typing import List, Optional
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, update
 from datetime import datetime
 
 from app.models.notification import Notification
@@ -112,7 +112,6 @@ class NotificationService:
 
     @staticmethod
     async def mark_all_as_read(db: AsyncSession, user_id: uuid.UUID) -> int:
-        from sqlalchemy import update
 
         stmt = (
             update(Notification)

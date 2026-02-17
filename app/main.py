@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.constants import APP_NAME
 from app.routers import (
     auth,
     tenant,
@@ -29,7 +30,7 @@ async def lifespan(app: FastAPI):
 setup_logging()
 
 app = FastAPI(
-    title="FastBank API",
+    title=f"{APP_NAME} API",
     description="FastAPI Banking Project with WebSocket Support",
     version="1.0.0",
     lifespan=lifespan,

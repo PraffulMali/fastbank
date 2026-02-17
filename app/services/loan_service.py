@@ -6,17 +6,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 from sqlalchemy import select, and_
 
+from app.services.notification_service import NotificationService
 from app.models.loan import Loan
 from app.models.loan_type import LoanType
 from app.models.interest_rule import InterestRule
 from app.models.account import Account
 from app.models.user import User
-from app.models.enums import LoanStatus, UserRole, RuleType
+from app.models.enums import (
+    LoanStatus,
+    UserRole,
+    RuleType,
+    NotificationType,
+    TransactionType,
+    TransactionStatus,
+    ReferenceType,
+)
+from app.models.transaction import Transaction
+from app.constants import MAX_LOAN_AMOUNT, MIN_LOAN_AMOUNT
+
 from app.schemas.loan import LoanCreate, LoanApprovalDecision
-
-MAX_LOAN_AMOUNT = Decimal("10000000.00")
-MIN_LOAN_AMOUNT = Decimal("10000.00")
-
 
 logger = logging.getLogger(__name__)
 
@@ -155,9 +163,6 @@ class LoanService:
         await db.commit()
         await db.refresh(new_loan)
 
-        from app.services.notification_service import NotificationService
-        from app.models.enums import NotificationType
-
         user = await db.get(User, user_id)
 
         await NotificationService.create_notification(
@@ -212,15 +217,6 @@ class LoanService:
 
         if loan.status != LoanStatus.APPLIED:
             raise ValueError(f"Cannot process loan with status {loan.status.value}")
-
-        from app.models.transaction import Transaction
-        from app.models.enums import (
-            TransactionType,
-            TransactionStatus,
-            ReferenceType,
-            NotificationType,
-        )
-        from app.services.notification_service import NotificationService
 
         loan_transaction_id = None
         account_number = None
