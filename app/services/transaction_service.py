@@ -1,5 +1,6 @@
 from typing import Optional, Tuple
 import uuid
+from fastapi import BackgroundTasks
 import logging
 from decimal import Decimal
 from datetime import datetime, timezone
@@ -34,7 +35,10 @@ class TransactionService:
 
     @staticmethod
     async def initiate_transfer(
-        db: AsyncSession, transfer_request: TransferRequest, current_user: User
+        db: AsyncSession,
+        transfer_request: TransferRequest,
+        current_user: User,
+        background_tasks: BackgroundTasks,
     ) -> Tuple[Transaction, Transaction, uuid.UUID]:
         source_query = select(Account).where(
             and_(
@@ -105,7 +109,7 @@ class TransactionService:
         await db.refresh(debit_transaction)
         await db.refresh(credit_transaction)
 
-        asyncio.create_task(TransactionBackgroundTasks.process_transfer(reference_id))
+        background_tasks.add_task(TransactionBackgroundTasks.process_transfer, reference_id)
 
         logger.info(f"Transfer Initiated - TenantID={source_account.tenant_id} | AccountID={source_account.id} | DestAccountID={dest_account.id} | Amount={amount_in_paise}")
 

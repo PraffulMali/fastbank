@@ -1,6 +1,6 @@
 from typing import Annotated
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -27,11 +27,12 @@ async def create_transfer(
     transfer_request: TransferRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_user)],
+    background_tasks: BackgroundTasks,
 ):
     try:
         debit_txn, credit_txn, reference_id = (
             await TransactionService.initiate_transfer(
-                db, transfer_request, current_user
+                db, transfer_request, current_user, background_tasks
             )
         )
 
