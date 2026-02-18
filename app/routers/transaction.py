@@ -1,10 +1,11 @@
-from typing import Annotated
+from typing import Annotated, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
+from app.models.enums import UserRole
 from app.schemas.transaction import (
     TransferRequest,
     DepositRequest,
@@ -73,9 +74,12 @@ async def list_transactions(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
-    include_inactive: bool = Query(False, description="Include inactive transactions"),
+    include_inactive: Optional[bool] = Query(None, description="Include inactive transactions"),
 ):
 
+    if include_inactive is None:
+        include_inactive = current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+    
     try:
         return await TransactionService.list_transactions(
             db, current_user, paginator, include_inactive

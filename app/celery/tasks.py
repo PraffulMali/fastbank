@@ -111,41 +111,4 @@ async def _cascade_soft_delete_tenant_task(tenant_id: uuid.UUID):
             raise
 
 
-@celery_app.task(name="app.celery.tasks.cascade_soft_delete_user")
-def cascade_soft_delete_user(user_id_str: str):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
 
-    try:
-        user_id = uuid.UUID(user_id_str)
-        logger.info(
-            f"Cascade Delete Task Started - Action=User_Soft_Delete | UserID={user_id_str}"
-        )
-        stats = loop.run_until_complete(_cascade_soft_delete_user_task(user_id))
-        logger.info(
-            f"Cascade Delete Task Completed - Result=Success | UserID={user_id_str} | Stats={stats}"
-        )
-        return stats
-    except Exception as e:
-        logger.error(
-            f"Cascade Delete Task Failed - Status=Error | UserID={user_id_str} | Error={str(e)}"
-        )
-        raise
-    finally:
-        loop.close()
-
-
-async def _cascade_soft_delete_user_task(user_id: uuid.UUID):
-    from app.services.cascade_delete_service import CascadeDeleteService
-
-    async with AsyncSessionLocal() as db:
-        try:
-            stats = await CascadeDeleteService.cascade_soft_delete_user(db, user_id)
-            await db.commit()
-            return stats
-        except Exception as e:
-            await db.rollback()
-            logger.error(
-                f"Cascade Delete User Internal Error - UserID={user_id} | Error={str(e)}"
-            )
-            raise

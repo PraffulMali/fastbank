@@ -38,7 +38,7 @@ async def list_accounts(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)],
     paginator: Paginator = Depends(),
-    include_inactive: bool = Query(False, description="Include inactive accounts"),
+    include_inactive: bool = Query(True, description="Include inactive accounts"),
 ):
     return await AccountService.list_accounts(
         db, current_user.tenant_id, paginator, include_inactive

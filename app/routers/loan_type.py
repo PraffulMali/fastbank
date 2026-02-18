@@ -1,10 +1,11 @@
-from typing import Annotated
+from typing import Annotated, Optional
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
+from app.models.enums import UserRole
 from app.schemas.loan_type import (
     LoanTypeCreate,
     LoanTypeUpdate,
@@ -39,8 +40,11 @@ async def list_loan_types(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
-    include_inactive: bool = False,
+    include_inactive: Optional[bool] = Query(None, description="Include inactive items"),
 ):
+
+    if include_inactive is None:
+        include_inactive = current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
     return await LoanTypeService.list_loan_types(
         db, current_user.tenant_id, paginator, include_inactive

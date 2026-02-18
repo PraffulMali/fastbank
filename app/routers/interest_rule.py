@@ -1,9 +1,10 @@
-from typing import Annotated
+from typing import Annotated, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User
+from app.models.enums import UserRole
 from app.schemas.interest_rule import (
     InterestRuleCreate,
     InterestRuleUpdate,
@@ -39,8 +40,11 @@ async def list_interest_rules(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
-    include_inactive: bool = Query(False, description="Include inactive interest rules"),
+    include_inactive: Optional[bool] = Query(None, description="Include inactive interest rules"),
 ):
+
+    if include_inactive is None:
+        include_inactive = current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
     return await InterestRuleService.list_interest_rules(
         db, current_user.tenant_id, paginator, include_inactive

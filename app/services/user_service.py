@@ -411,8 +411,6 @@ class UserService:
 
     @staticmethod
     async def soft_delete_user(db: AsyncSession, user_id: uuid.UUID) -> Optional[User]:
-        from app.celery.tasks import cascade_soft_delete_user
-
         user = await db.get(User, user_id)
         if not user:
             return None
@@ -426,7 +424,14 @@ class UserService:
         await db.commit()
         await db.refresh(user)
 
-        cascade_soft_delete_user.delay(str(user_id))
+        accounts = await AccountService.list_user_accounts(db, user_id, user.tenant_id)
+        for account in accounts:
+            try:
+                if account.is_active:
+                    await AccountService.soft_delete_account(db, account.id)
+            except ValueError as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to soft delete account {account.id}: {str(e)}")
 
         return user
 

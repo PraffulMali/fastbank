@@ -62,7 +62,7 @@ async def list_loans(
         None, description="Filter by status: APPLIED, APPROVED, REJECTED"
     ),
     paginator: Paginator = Depends(),
-    include_inactive: bool = Query(False, description="Include inactive loans"),
+    include_inactive: bool = Query(True, description="Include inactive loans"),
 ):
 
     query = select(Loan).where(Loan.tenant_id == current_user.tenant_id)
