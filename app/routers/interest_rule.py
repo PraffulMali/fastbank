@@ -1,6 +1,6 @@
 from typing import Annotated
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User
@@ -39,10 +39,11 @@ async def list_interest_rules(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
+    include_inactive: bool = Query(False, description="Include inactive interest rules"),
 ):
 
     return await InterestRuleService.list_interest_rules(
-        db, current_user.tenant_id, paginator
+        db, current_user.tenant_id, paginator, include_inactive
     )
 
 

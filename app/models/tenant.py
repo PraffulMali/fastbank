@@ -9,6 +9,11 @@ if TYPE_CHECKING:
     from app.models.account import Account
     from app.models.transaction import Transaction
     from app.models.loan import Loan
+    from app.models.loan_repayment import LoanRepayment
+    from app.models.notification import Notification
+    from app.models.account_type import AccountType
+    from app.models.loan_type import LoanType
+    from app.models.interest_rule import InterestRule
 
 
 class Tenant(BaseModel):
@@ -43,6 +48,20 @@ class Tenant(BaseModel):
 
     loans: Mapped[list["Loan"]] = relationship(
         "Loan", back_populates="tenant", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+    loan_repayments: Mapped[list["LoanRepayment"]] = relationship(
+        "LoanRepayment",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    notifications: Mapped[list["Notification"]] = relationship(
+        "Notification",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     account_types: Mapped[list["AccountType"]] = relationship(

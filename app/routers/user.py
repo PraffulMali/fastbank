@@ -1,6 +1,6 @@
 from typing import Annotated, Union
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -52,8 +52,9 @@ async def list_users(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_admin)],
     paginator: Paginator = Depends(),
+    include_inactive: bool = Query(False, description="Include inactive users"),
 ):
-    return await UserService.list_users(db, current_user, paginator)
+    return await UserService.list_users(db, current_user, paginator, include_inactive)
 
 
 @router.get("/{user_id}", response_model=Union[UserDetailResponse, UserSelfResponse])

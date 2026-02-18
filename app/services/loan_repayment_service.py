@@ -33,12 +33,12 @@ class LoanRepaymentService:
         annual_interest_rate: Decimal,
     ) -> Tuple[int, int]:
         """
-        Calculate the EMI split into principal and interest components.
+        Splits an EMI into interest and principal components.
 
         Formula:
-            monthly_rate = annual_interest_rate / 12 / 100
-            interest_component = remaining_principal × monthly_rate
-            principal_component = emi_amount − interest_component
+            monthly_rate = (annual_interest_rate / 12) / 100
+            interest = remaining_principal * monthly_rate
+            principal = emi_amount - interest
         """
         monthly_rate = annual_interest_rate / Decimal("12") / Decimal("100")
         interest_component = int(Decimal(remaining_principal) * monthly_rate)
@@ -47,7 +47,6 @@ class LoanRepaymentService:
 
         if principal_component > remaining_principal:
             principal_component = remaining_principal
-            interest_component = emi_amount - principal_component
 
         return (principal_component, interest_component)
 
@@ -148,8 +147,8 @@ class LoanRepaymentService:
                     )
                 )
 
+                actual_emi_needed = principal_component + interest_component
                 transaction_id = None
-                emi_amount = loan.emi_amount
                 remaining_principal_after = None
 
                 async with db.begin_nested():
@@ -159,13 +158,13 @@ class LoanRepaymentService:
                         reference_id=loan.id,
                         transaction_type=TransactionType.DEBIT,
                         reference_type=ReferenceType.LOAN,
-                        amount=loan.emi_amount,
+                        amount=actual_emi_needed,
                         status=TransactionStatus.SUCCESS,
                     )
 
                     db.add(emi_transaction)
 
-                    account.balance -= loan.emi_amount
+                    account.balance -= actual_emi_needed
 
                     loan.remaining_principal -= principal_component
 
@@ -181,7 +180,7 @@ class LoanRepaymentService:
                         tenant_id=loan.tenant_id,
                         loan_id=loan.id,
                         transaction_id=emi_transaction.id,
-                        amount_paid=loan.emi_amount,
+                        amount_paid=actual_emi_needed,
                         principal_component=principal_component,
                         interest_component=interest_component,
                         payment_date=datetime.now(timezone.utc),
@@ -199,7 +198,7 @@ class LoanRepaymentService:
                     tenant_id=loan.tenant_id,
                     user_id=loan.user_id,
                     notification_type=NotificationType.TRANSACTION_SUCCESS,
-                    message=f"EMI payment of ₹{emi_amount / 100:,.2f} deducted successfully. Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}. Remaining principal: ₹{remaining_principal_after / 100:,.2f}",
+                    message=f"EMI payment of ₹{actual_emi_needed / 100:,.2f} deducted successfully. Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}. Remaining principal: ₹{remaining_principal_after / 100:,.2f}",
                     reference_id=transaction_id,
                     reference_type="transaction",
                     send_websocket=True,
@@ -208,14 +207,14 @@ class LoanRepaymentService:
                 logger.info(
                     f"EMI Deducted - Status=Success | "
                     f"LoanID={loan.id} | "
-                    f"AmountPaid={emi_amount / 100} | "
+                    f"AmountPaid={actual_emi_needed / 100} | "
                     f"PrincipalComponent={principal_component / 100} | "
                     f"InterestComponent={interest_component / 100} | "
                     f"RemainingPrincipal={remaining_principal_after / 100}"
                 )
 
                 stats["successful"] += 1
-                stats["total_amount_collected"] += emi_amount
+                stats["total_amount_collected"] += actual_emi_needed
 
             except Exception as e:
                 stats["failed"] += 1

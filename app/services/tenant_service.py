@@ -82,12 +82,17 @@ class TenantService:
         return await db.get(Tenant, tenant_id)
 
     @staticmethod
-    def get_tenants_query():
-        return select(Tenant)
+    def get_tenants_query(include_inactive: bool = False):
+        query = select(Tenant)
+        if not include_inactive:
+            query = query.where(Tenant.is_active.is_(True))
+        return query
 
     @staticmethod
-    async def list_tenants(db: AsyncSession, paginator: Paginator) -> Page:
-        query = TenantService.get_tenants_query()
+    async def list_tenants(
+        db: AsyncSession, paginator: Paginator, include_inactive: bool = False
+    ) -> Page:
+        query = TenantService.get_tenants_query(include_inactive)
         return await paginator.paginate(db, query)
 
     @staticmethod
@@ -120,6 +125,8 @@ class TenantService:
     async def soft_delete_tenant(
         db: AsyncSession, tenant_id: uuid.UUID
     ) -> Optional[Tenant]:
+        from app.celery.tasks import cascade_soft_delete_tenant
+
         tenant = await db.get(Tenant, tenant_id)
         if not tenant:
             return None
@@ -132,4 +139,7 @@ class TenantService:
 
         await db.commit()
         await db.refresh(tenant)
+
+        cascade_soft_delete_tenant.delay(str(tenant_id))
+
         return tenant

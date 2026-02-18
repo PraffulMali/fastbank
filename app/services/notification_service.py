@@ -72,7 +72,9 @@ class NotificationService:
         paginator: Paginator,
         unread_only: bool = False,
     ) -> Page:
-        query = select(Notification).where(Notification.user_id == user_id)
+        query = select(Notification).where(
+            and_(Notification.user_id == user_id, Notification.is_active == True)
+        )
 
         if unread_only:
             query = query.where(Notification.is_read == False)
@@ -86,7 +88,13 @@ class NotificationService:
         query = (
             select(func.count())
             .select_from(Notification)
-            .where(and_(Notification.user_id == user_id, Notification.is_read == False))
+            .where(
+                and_(
+                    Notification.user_id == user_id,
+                    Notification.is_read == False,
+                    Notification.is_active == True,
+                )
+            )
         )
         result = await db.execute(query)
         return result.scalar_one()
@@ -114,7 +122,13 @@ class NotificationService:
 
         stmt = (
             update(Notification)
-            .where(and_(Notification.user_id == user_id, Notification.is_read == False))
+            .where(
+                and_(
+                    Notification.user_id == user_id,
+                    Notification.is_read == False,
+                    Notification.is_active == True,
+                )
+            )
             .values(is_read=True)
         )
 

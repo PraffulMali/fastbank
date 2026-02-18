@@ -1,6 +1,6 @@
 from typing import Annotated
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -38,8 +38,11 @@ async def list_accounts(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)],
     paginator: Paginator = Depends(),
+    include_inactive: bool = Query(False, description="Include inactive accounts"),
 ):
-    return await AccountService.list_accounts(db, current_user.tenant_id, paginator)
+    return await AccountService.list_accounts(
+        db, current_user.tenant_id, paginator, include_inactive
+    )
 
 
 @router.get("/me", response_model=AccountUserResponse)

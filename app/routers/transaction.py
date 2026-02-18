@@ -1,6 +1,6 @@
 from typing import Annotated
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -73,10 +73,13 @@ async def list_transactions(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
+    include_inactive: bool = Query(False, description="Include inactive transactions"),
 ):
 
     try:
-        return await TransactionService.list_transactions(db, current_user, paginator)
+        return await TransactionService.list_transactions(
+            db, current_user, paginator, include_inactive
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except PermissionError as e:

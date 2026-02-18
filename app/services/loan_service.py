@@ -329,9 +329,15 @@ class LoanService:
 
     @staticmethod
     async def list_tenant_loans(
-        db: AsyncSession, tenant_id: uuid.UUID, status: Optional[LoanStatus] = None
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        status: Optional[LoanStatus] = None,
+        include_inactive: bool = False,
     ) -> List[Loan]:
         query = select(Loan).where(Loan.tenant_id == tenant_id)
+
+        if not include_inactive:
+            query = query.where(Loan.is_active == True)
 
         if status:
             query = query.where(Loan.status == status)

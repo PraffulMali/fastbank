@@ -1,6 +1,6 @@
 from typing import Annotated, List
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse
@@ -26,9 +26,11 @@ async def create_tenant(
 
 @router.get("/", response_model=Page[TenantResponse])
 async def list_tenants(
-    db: Annotated[AsyncSession, Depends(get_db)], paginator: Paginator = Depends()
+    db: Annotated[AsyncSession, Depends(get_db)],
+    paginator: Paginator = Depends(),
+    include_inactive: bool = Query(True, description="Include inactive tenants"),
 ):
-    return await TenantService.list_tenants(db, paginator)
+    return await TenantService.list_tenants(db, paginator, include_inactive)
 
 
 @router.get("/{tenant_id}", response_model=TenantResponse)

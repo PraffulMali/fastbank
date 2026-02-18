@@ -118,9 +118,15 @@ class InterestRuleService:
 
     @staticmethod
     async def list_interest_rules(
-        db: AsyncSession, tenant_id: uuid.UUID, paginator: Paginator
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        paginator: Paginator,
+        include_inactive: bool = False,
     ) -> Page:
         query = select(InterestRule).where(InterestRule.tenant_id == tenant_id)
+
+        if not include_inactive:
+            query = query.where(InterestRule.is_active.is_(True))
 
         query = query.order_by(InterestRule.created_at.desc())
 

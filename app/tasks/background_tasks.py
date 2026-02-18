@@ -21,8 +21,6 @@ class TransactionBackgroundTasks:
     async def process_transfer(reference_id: uuid.UUID):
         async with AsyncSessionLocal() as db:
             try:
-                await asyncio.sleep(5)
-
                 async with db.begin():
 
                     query = select(Transaction).where(

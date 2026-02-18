@@ -296,17 +296,24 @@ class UserService:
             raise ValueError("Unauthorized to create users")
 
     @staticmethod
-    def get_users_query(current_user: User):
+    def get_users_query(current_user: User, include_inactive: bool = False):
         if current_user.role == UserRole.SUPER_ADMIN:
-            return select(User).where(User.role == UserRole.ADMIN)
+            query = select(User).where(User.role == UserRole.ADMIN)
         else:
-            return select(User).where(User.tenant_id == current_user.tenant_id)
+            query = select(User).where(User.tenant_id == current_user.tenant_id)
+
+        if not include_inactive:
+            query = query.where(User.is_active.is_(True))
+        return query
 
     @staticmethod
     async def list_users(
-        db: AsyncSession, current_user: User, paginator: Paginator
+        db: AsyncSession,
+        current_user: User,
+        paginator: Paginator,
+        include_inactive: bool = False,
     ) -> Page:
-        query = UserService.get_users_query(current_user)
+        query = UserService.get_users_query(current_user, include_inactive)
         return await paginator.paginate(db, query)
 
     @staticmethod
@@ -404,6 +411,8 @@ class UserService:
 
     @staticmethod
     async def soft_delete_user(db: AsyncSession, user_id: uuid.UUID) -> Optional[User]:
+        from app.celery.tasks import cascade_soft_delete_user
+
         user = await db.get(User, user_id)
         if not user:
             return None
@@ -416,6 +425,9 @@ class UserService:
 
         await db.commit()
         await db.refresh(user)
+
+        cascade_soft_delete_user.delay(str(user_id))
+
         return user
 
     @staticmethod

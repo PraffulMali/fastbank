@@ -40,6 +40,7 @@ class TransactionService:
         source_query = select(Account).where(
             and_(
                 Account.account_number == transfer_request.source_account_number,
+                Account.tenant_id == current_user.tenant_id,
                 Account.is_active == True,
             )
         )
@@ -249,22 +250,28 @@ class TransactionService:
         )
 
     @staticmethod
-    def get_tenant_transactions_query(tenant_id: uuid.UUID):
-        return (
-            select(Transaction)
-            .where(Transaction.tenant_id == tenant_id)
-            .order_by(Transaction.created_at.desc())
-        )
+    def get_tenant_transactions_query(
+        tenant_id: uuid.UUID, include_inactive: bool = False
+    ):
+        query = select(Transaction).where(Transaction.tenant_id == tenant_id)
+
+        if not include_inactive:
+            query = query.where(Transaction.is_active.is_(True))
+
+        return query.order_by(Transaction.created_at.desc())
 
     @staticmethod
     async def list_transactions(
-        db: AsyncSession, current_user: User, paginator: Paginator
+        db: AsyncSession,
+        current_user: User,
+        paginator: Paginator,
+        include_inactive: bool = False,
     ) -> Page:
         if current_user.role == UserRole.USER:
             query = TransactionService.get_user_transactions_query(current_user)
         elif current_user.role == UserRole.ADMIN:
             query = TransactionService.get_tenant_transactions_query(
-                current_user.tenant_id
+                current_user.tenant_id, include_inactive
             )
         else:
             raise PermissionError("Invalid role for transaction access")
