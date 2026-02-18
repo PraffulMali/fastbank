@@ -12,6 +12,7 @@ from app.models.transaction import Transaction
 from app.models.notification import Notification
 from app.models.account_type import AccountType
 from app.models.loan_type import LoanType
+from app.services.notification_service import NotificationService
 from app.models.enums import (
     RuleType,
     TransactionType,
@@ -111,10 +112,17 @@ class InterestRuleService:
         return new_rule
 
     @staticmethod
-    async def get_interest_rule_by_id(
-        db: AsyncSession, rule_id: uuid.UUID
-    ) -> Optional[InterestRule]:
-        return await db.get(InterestRule, rule_id)
+    async def get_interest_rule_with_permissions(
+        db: AsyncSession, rule_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> InterestRule:
+        rule = await db.get(InterestRule, rule_id)
+        if not rule:
+            raise ValueError("Interest rule not found")
+
+        if rule.tenant_id != tenant_id:
+            raise PermissionError("Cannot access interest rule from different tenant")
+
+        return rule
 
     @staticmethod
     async def list_interest_rules(
@@ -139,12 +147,9 @@ class InterestRuleService:
         rule_update: InterestRuleUpdate,
         tenant_id: uuid.UUID,
     ) -> Optional[InterestRule]:
-        rule = await db.get(InterestRule, rule_id)
-        if not rule:
-            return None
-
-        if rule.tenant_id != tenant_id:
-            raise PermissionError("Cannot update interest rule from different tenant")
+        rule = await InterestRuleService.get_interest_rule_with_permissions(
+            db, rule_id, tenant_id
+        )
 
         update_data = rule_update.model_dump(exclude_unset=True)
 
@@ -200,12 +205,9 @@ class InterestRuleService:
     async def delete_interest_rule(
         db: AsyncSession, rule_id: uuid.UUID, tenant_id: uuid.UUID
     ) -> None:
-        rule = await db.get(InterestRule, rule_id)
-        if not rule:
-            raise ValueError("Interest rule not found")
-
-        if rule.tenant_id != tenant_id:
-            raise PermissionError("Cannot delete interest rule from different tenant")
+        rule = await InterestRuleService.get_interest_rule_with_permissions(
+            db, rule_id, tenant_id
+        )
 
         await db.delete(rule)
         await db.commit()
@@ -213,12 +215,10 @@ class InterestRuleService:
     @staticmethod
     async def get_interest_rule_detail(
         db: AsyncSession, rule_id: uuid.UUID, tenant_id: uuid.UUID
-    ) -> Optional[InterestRule]:
-        rule = await db.get(InterestRule, rule_id)
-        if not rule or rule.tenant_id != tenant_id:
-            return None
-
-        return rule
+    ) -> InterestRule:
+        return await InterestRuleService.get_interest_rule_with_permissions(
+            db, rule_id, tenant_id
+        )
 
     @staticmethod
     async def process_monthly_interest_accrual(db: AsyncSession) -> dict:
@@ -295,20 +295,17 @@ class InterestRuleService:
                             account.balance += interest_amount_paise
 
                             interest_in_rupees = Decimal(interest_amount_paise) / 100
-                            notification = Notification(
+                            await NotificationService.create_notification(
+                                db=db,
                                 tenant_id=account.tenant_id,
                                 user_id=account.user_id,
                                 notification_type=NotificationType.TRANSACTION_SUCCESS,
                                 message=f"Interest credited: ₹{interest_in_rupees:.2f}",
                                 reference_id=txn_id,
                                 reference_type="transaction",
-                                is_read=False,
-                                created_at=datetime.now(timezone.utc),
-                                updated_at=datetime.now(timezone.utc),
-                                is_active=True,
+                                send_websocket=True,
+                                commit=False,
                             )
-                            db.add(notification)
-
                             stats["success"] += 1
                             stats["total_interest"] += interest_amount_decimal
 

@@ -46,17 +46,11 @@ async def mark_notification_as_read(
     current_user: Annotated[User, Depends(require_tenant_member)],
 ):
     try:
-        notification = await NotificationService.mark_as_read(
+        return await NotificationService.mark_as_read(
             db, notification_id, current_user.id
         )
-
-        if not notification:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
-            )
-
-        return notification
-
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
@@ -77,14 +71,10 @@ async def delete_notification(
     current_user: Annotated[User, Depends(require_tenant_member)],
 ):
     try:
-        deleted = await NotificationService.delete_notification(
+        await NotificationService.delete_notification(
             db, notification_id, current_user.id
         )
-
-        if not deleted:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
-            )
-
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

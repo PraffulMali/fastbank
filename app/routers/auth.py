@@ -15,7 +15,7 @@ from app.schemas.auth import (
     ResendVerificationRequest,
 )
 from app.services.user_service import UserService
-from app.dependencies import get_current_user, security
+from app.dependencies import security
 from app.services.email_service import EmailService
 from fastapi.security import HTTPAuthorizationCredentials
 from jose import jwt, JWTError
@@ -25,7 +25,6 @@ from app.constants import (
     RATE_LIMIT_TIMES,
     RATE_LIMIT_WINDOW_SECONDS,
 )
-from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -110,8 +109,6 @@ async def refresh_token(
 async def logout(
     logout_data: UserLogoutRequest,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
 ):
     try:
         await UserService.blacklist_token(credentials.credentials)
@@ -131,14 +128,15 @@ async def logout(
         Depends(RateLimiter(times=RATE_LIMIT_TIMES, seconds=RATE_LIMIT_WINDOW_SECONDS))
     ],
 )
-async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
-    success = await UserService.verify_user_email(db, token)
-    if not success:
+async def verify_email(token: str, db: Annotated[AsyncSession, Depends(get_db)]):
+    try:
+        await UserService.verify_user_email(db, token)
+        return {"message": "Email verified successfully"}
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired verification token",
+            detail=str(e),
         )
-    return {"message": "Email verified successfully"}
 
 
 @router.post(
@@ -177,19 +175,18 @@ async def forgot_password(
     ],
 )
 async def reset_password(
-    reset_data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
+    reset_data: ResetPasswordRequest, db: Annotated[AsyncSession, Depends(get_db)]
 ):
-    success = await UserService.reset_password_with_token(
-        db, reset_data.token, reset_data.new_password
-    )
-
-    if not success:
+    try:
+        await UserService.reset_password_with_token(
+            db, reset_data.token, reset_data.new_password
+        )
+        return {"message": "Password has been reset successfully"}
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset token",
+            detail=str(e),
         )
-
-    return {"message": "Password has been reset successfully"}
 
 
 @router.post(

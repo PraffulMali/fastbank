@@ -22,6 +22,7 @@ class NotificationService:
         reference_id: Optional[uuid.UUID] = None,
         reference_type: Optional[str] = None,
         send_websocket: bool = True,
+        commit: bool = True,
     ) -> Notification:
         notification = Notification(
             tenant_id=tenant_id,
@@ -34,8 +35,11 @@ class NotificationService:
         )
 
         db.add(notification)
-        await db.commit()
-        await db.refresh(notification)
+        if commit:
+            await db.commit()
+            await db.refresh(notification)
+        else:
+            await db.flush()
 
         if send_websocket:
             await NotificationService.send_websocket_notification(notification)
@@ -106,7 +110,7 @@ class NotificationService:
         notification = await db.get(Notification, notification_id)
 
         if not notification:
-            return None
+            raise ValueError("Notification not found")
 
         if notification.user_id != user_id:
             raise PermissionError("Cannot mark another user's notification as read")
@@ -144,7 +148,7 @@ class NotificationService:
         notification = await db.get(Notification, notification_id)
 
         if not notification:
-            return False
+            raise ValueError("Notification not found")
 
         if notification.user_id != user_id:
             raise PermissionError("Cannot delete another user's notification")

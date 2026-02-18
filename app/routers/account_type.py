@@ -42,7 +42,9 @@ async def list_account_types(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
-    include_inactive: Optional[bool] = Query(None, description="Include inactive items"),
+    include_inactive: Optional[bool] = Query(
+        None, description="Include inactive items"
+    ),
 ):
 
     if include_inactive is None:
@@ -60,16 +62,14 @@ async def get_account_type(
     current_user: Annotated[User, Depends(require_tenant_member)],
 ):
 
-    account_type = await AccountTypeService.get_account_type_with_rules(
-        db, account_type_id, current_user.tenant_id
-    )
-
-    if not account_type:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Account type not found"
+    try:
+        return await AccountTypeService.get_account_type_with_rules(
+            db, account_type_id, current_user.tenant_id
         )
-
-    return account_type
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.patch("/{account_type_id}", response_model=AccountTypeResponse)
@@ -81,18 +81,13 @@ async def update_account_type(
 ):
 
     try:
-        account_type = await AccountTypeService.update_account_type(
+        return await AccountTypeService.update_account_type(
             db, account_type_id, account_type_update, current_user.tenant_id
         )
 
-        if not account_type:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Account type not found"
-            )
-
-        return account_type
-
     except ValueError as e:
+        if str(e) == "Account type not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
@@ -110,6 +105,8 @@ async def delete_account_type(
             db, account_type_id, current_user.tenant_id
         )
     except ValueError as e:
+        if str(e) == "Account type not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

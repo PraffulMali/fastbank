@@ -109,6 +109,3 @@ async def _cascade_soft_delete_tenant_task(tenant_id: uuid.UUID):
                 f"Cascade Delete Tenant Internal Error - TenantID={tenant_id} | Error={str(e)}"
             )
             raise
-
-
-

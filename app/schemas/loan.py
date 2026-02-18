@@ -32,7 +32,9 @@ class LoanCreate(BaseModel):
 
 
 class LoanApprovalDecision(BaseModel):
-    decision: Literal["APPROVED", "REJECTED"] = Field(..., description="APPROVED or REJECTED")
+    decision: Literal["APPROVED", "REJECTED"] = Field(
+        ..., description="APPROVED or REJECTED"
+    )
     rejection_reason: Optional[str] = Field(None, max_length=500)
 
     @field_validator("decision", mode="before")

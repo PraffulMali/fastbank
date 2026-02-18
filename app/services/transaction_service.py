@@ -180,16 +180,16 @@ class TransactionService:
         return await db.get(Transaction, transaction_id)
 
     @staticmethod
-    async def get_transaction_detail_with_counterparty(
-        db: AsyncSession, transaction_id: uuid.UUID
-    ) -> Optional[TransactionDetailResponse]:
-        transaction = await db.get(Transaction, transaction_id)
-        if not transaction:
-            return None
+    async def get_transaction_detail_with_permissions(
+        db: AsyncSession, transaction_id: uuid.UUID, current_user: User
+    ) -> TransactionDetailResponse:
+        transaction = await TransactionService.verify_transaction_access(
+            db, transaction_id, current_user
+        )
 
         account = await db.get(Account, transaction.account_id)
         if not account:
-            return None
+            raise ValueError("Account not found for transaction")
 
         counterparty = None
 

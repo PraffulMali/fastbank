@@ -400,6 +400,9 @@ class UserService:
         if not user:
             raise ValueError("User not found")
 
+        if current_user.id == user_id:
+            raise PermissionError("Admin can not delete an admin")
+
         if current_user.role == UserRole.SUPER_ADMIN:
             if user.role != UserRole.ADMIN:
                 raise PermissionError("SUPER_ADMIN can only delete ADMIN users")
@@ -431,7 +434,10 @@ class UserService:
                     await AccountService.soft_delete_account(db, account.id)
             except ValueError as e:
                 import logging
-                logging.getLogger(__name__).error(f"Failed to soft delete account {account.id}: {str(e)}")
+
+                logging.getLogger(__name__).error(
+                    f"Failed to soft delete account {account.id}: {str(e)}"
+                )
 
         return user
 
@@ -443,13 +449,13 @@ class UserService:
         user_id_str = await redis.get(f"verify_token:{hashed_token}")
 
         if not user_id_str:
-            return False
+            raise ValueError("Invalid or expired verification token")
 
         user_id = uuid.UUID(user_id_str)
         user = await db.get(User, user_id)
 
         if not user:
-            return False
+            raise ValueError("User not found")
 
         user.is_email_verified = True
         await db.commit()
@@ -516,13 +522,13 @@ class UserService:
         user_id_str = await redis.get(f"reset_token:{hashed_token}")
 
         if not user_id_str:
-            return False
+            raise ValueError("Invalid or expired reset token")
 
         user_id = uuid.UUID(user_id_str)
         user = await db.get(User, user_id)
 
         if not user:
-            return False
+            raise ValueError("User not found for password reset")
 
         user.password = get_password_hash(new_password)
         await db.commit()

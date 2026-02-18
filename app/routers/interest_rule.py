@@ -40,7 +40,9 @@ async def list_interest_rules(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
-    include_inactive: Optional[bool] = Query(None, description="Include inactive interest rules"),
+    include_inactive: Optional[bool] = Query(
+        None, description="Include inactive interest rules"
+    ),
 ):
 
     if include_inactive is None:
@@ -58,16 +60,14 @@ async def get_interest_rule(
     current_user: Annotated[User, Depends(require_tenant_member)],
 ):
 
-    rule = await InterestRuleService.get_interest_rule_detail(
-        db, rule_id, current_user.tenant_id
-    )
-
-    if not rule:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Interest rule not found"
+    try:
+        return await InterestRuleService.get_interest_rule_detail(
+            db, rule_id, current_user.tenant_id
         )
-
-    return rule
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.patch("/{rule_id}", response_model=InterestRuleResponse)
@@ -79,18 +79,13 @@ async def update_interest_rule(
 ):
 
     try:
-        rule = await InterestRuleService.update_interest_rule(
+        return await InterestRuleService.update_interest_rule(
             db, rule_id, rule_update, current_user.tenant_id
         )
 
-        if not rule:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Interest rule not found"
-            )
-
-        return rule
-
     except ValueError as e:
+        if str(e) == "Interest rule not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
@@ -108,6 +103,8 @@ async def delete_interest_rule(
             db, rule_id, current_user.tenant_id
         )
     except ValueError as e:
+        if str(e) == "Interest rule not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

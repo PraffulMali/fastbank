@@ -74,12 +74,14 @@ async def list_transactions(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
-    include_inactive: Optional[bool] = Query(None, description="Include inactive transactions"),
+    include_inactive: Optional[bool] = Query(
+        None, description="Include inactive transactions"
+    ),
 ):
 
     if include_inactive is None:
         include_inactive = current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
-    
+
     try:
         return await TransactionService.list_transactions(
             db, current_user, paginator, include_inactive
@@ -98,22 +100,9 @@ async def get_transaction(
 ):
 
     try:
-        await TransactionService.verify_transaction_access(
+        return await TransactionService.get_transaction_detail_with_permissions(
             db, transaction_id, current_user
         )
-
-        transaction_detail = (
-            await TransactionService.get_transaction_detail_with_counterparty(
-                db, transaction_id
-            )
-        )
-
-        if not transaction_detail:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found"
-            )
-
-        return transaction_detail
 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

@@ -78,8 +78,11 @@ class TenantService:
         return new_tenant
 
     @staticmethod
-    async def get_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> Optional[Tenant]:
-        return await db.get(Tenant, tenant_id)
+    async def get_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant:
+        tenant = await db.get(Tenant, tenant_id)
+        if not tenant:
+            raise ValueError("Tenant not found")
+        return tenant
 
     @staticmethod
     def get_tenants_query(include_inactive: bool = False):
@@ -98,10 +101,8 @@ class TenantService:
     @staticmethod
     async def update_tenant(
         db: AsyncSession, tenant_id: uuid.UUID, tenant_update: TenantUpdate
-    ) -> Optional[Tenant]:
-        tenant = await db.get(Tenant, tenant_id)
-        if not tenant:
-            return None
+    ) -> Tenant:
+        tenant = await TenantService.get_tenant(db, tenant_id)
 
         if tenant_update.name is not None and tenant_update.name != tenant.name:
             query = select(Tenant).where(Tenant.name == tenant_update.name)
@@ -122,14 +123,10 @@ class TenantService:
         return tenant
 
     @staticmethod
-    async def soft_delete_tenant(
-        db: AsyncSession, tenant_id: uuid.UUID
-    ) -> Optional[Tenant]:
+    async def soft_delete_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant:
         from app.celery.tasks import cascade_soft_delete_tenant
 
-        tenant = await db.get(Tenant, tenant_id)
-        if not tenant:
-            return None
+        tenant = await TenantService.get_tenant(db, tenant_id)
 
         if not tenant.is_active:
             raise ValueError("Tenant is already deleted")

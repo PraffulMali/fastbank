@@ -208,12 +208,7 @@ class LoanService:
         admin_id: uuid.UUID,
         tenant_id: uuid.UUID,
     ) -> Loan:
-        loan = await db.get(Loan, loan_id)
-        if not loan:
-            raise ValueError("Loan not found")
-
-        if loan.tenant_id != tenant_id:
-            raise ValueError("Cannot process loan from different tenant")
+        loan = await LoanService.get_loan_with_permissions(db, loan_id, tenant_id)
 
         if loan.status != LoanStatus.APPLIED:
             raise ValueError(f"Cannot process loan with status {loan.status.value}")
@@ -305,8 +300,17 @@ class LoanService:
         return loan
 
     @staticmethod
-    async def get_loan_by_id(db: AsyncSession, loan_id: uuid.UUID) -> Optional[Loan]:
-        return await db.get(Loan, loan_id)
+    async def get_loan_with_permissions(
+        db: AsyncSession, loan_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> Loan:
+        loan = await db.get(Loan, loan_id)
+        if not loan:
+            raise ValueError("Loan not found")
+
+        if loan.tenant_id != tenant_id:
+            raise PermissionError("Cannot access loan from different tenant")
+
+        return loan
 
     @staticmethod
     async def list_user_loans(
@@ -348,10 +352,10 @@ class LoanService:
         return list(result.scalars().all())
 
     @staticmethod
-    async def soft_delete_loan(db: AsyncSession, loan_id: uuid.UUID) -> Optional[Loan]:
-        loan = await db.get(Loan, loan_id)
-        if not loan:
-            return None
+    async def soft_delete_loan(
+        db: AsyncSession, loan_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> Loan:
+        loan = await LoanService.get_loan_with_permissions(db, loan_id, tenant_id)
 
         if not loan.is_active:
             raise ValueError("Loan is already deleted")
