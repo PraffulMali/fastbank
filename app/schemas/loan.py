@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Literal
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -20,29 +20,25 @@ class LoanCreate(BaseModel):
 
     @field_validator("principal_amount")
     def validate_principal(cls, v: Decimal) -> Decimal:
-        if v <= 0:
-            raise ValueError("Principal amount must be greater than 0")
         if v > Decimal("10000000.00"):
             raise ValueError("Principal amount cannot exceed ₹1,00,00,000")
         return v
 
-    @field_validator("loan_purpose")
+    @field_validator("loan_purpose", mode="before")
     def validate_purpose(cls, v: str) -> str:
-        v = v.strip()
-        if len(v) < 10:
-            raise ValueError("Loan purpose must be at least 10 characters")
+        if isinstance(v, str):
+            return v.strip()
         return v
 
 
 class LoanApprovalDecision(BaseModel):
-    decision: str = Field(..., description="APPROVED or REJECTED")
+    decision: Literal["APPROVED", "REJECTED"] = Field(..., description="APPROVED or REJECTED")
     rejection_reason: Optional[str] = Field(None, max_length=500)
 
-    @field_validator("decision")
+    @field_validator("decision", mode="before")
     def validate_decision(cls, v: str) -> str:
-        v = v.upper()
-        if v not in ["APPROVED", "REJECTED"]:
-            raise ValueError("Decision must be either APPROVED or REJECTED")
+        if isinstance(v, str):
+            v = v.upper()
         return v
 
     @field_validator("rejection_reason")
@@ -141,8 +137,6 @@ class AdvanceLoanRepaymentRequest(BaseModel):
 
     @field_validator("payment_amount")
     def validate_payment_amount(cls, v: Decimal) -> Decimal:
-        if v <= 0:
-            raise ValueError("Payment amount must be greater than zero")
         if v > Decimal("100000000.00"):
             raise ValueError("Payment amount cannot exceed ₹10,00,00,000")
         return v

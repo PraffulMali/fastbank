@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Literal
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class InterestRuleCreate(BaseModel):
-    rule_type: str = Field(..., description="ACCOUNT or LOAN")
+    rule_type: Literal["ACCOUNT", "LOAN"] = Field(..., description="ACCOUNT or LOAN")
 
     account_type_id: Optional[uuid.UUID] = None
     min_balance: Optional[Decimal] = Field(
@@ -22,11 +22,10 @@ class InterestRuleCreate(BaseModel):
         ..., ge=0, le=100, decimal_places=2, description="Interest rate as percentage"
     )
 
-    @field_validator("rule_type")
+    @field_validator("rule_type", mode="before")
     def validate_rule_type(cls, v: str) -> str:
-        v = v.upper()
-        if v not in ["ACCOUNT", "LOAN"]:
-            raise ValueError("rule_type must be either ACCOUNT or LOAN")
+        if isinstance(v, str):
+            return v.upper()
         return v
 
     @model_validator(mode="after")

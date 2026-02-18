@@ -9,9 +9,10 @@ class UserBase(BaseModel):
     email: EmailStr
     full_name: str = Field(..., min_length=2, max_length=100)
 
-    @field_validator("full_name")
+    @field_validator("full_name", mode="before")
     def validate_full_name(cls, v: str) -> str:
-        v = " ".join(v.split())
+        if isinstance(v, str):
+            v = " ".join(v.split())
         if not re.match(r"^[A-Za-z\s]+$", v):
             raise ValueError("Full name must contain only alphabets and spaces")
         return v
@@ -47,11 +48,10 @@ class UserCreateByAdmin(UserBase):
             raise ValueError("Invalid PAN number format")
         return v
 
-    @field_validator("phone_number")
+    @field_validator("phone_number", mode="before")
     def validate_phone(cls, v: str) -> str:
-        v = re.sub(r"\D", "", v)
-        if len(v) < 10:
-            raise ValueError("Phone number must be at least 10 digits")
+        if isinstance(v, str):
+            v = re.sub(r"\D", "", v)
         return v
 
 
@@ -62,9 +62,6 @@ class ChangePasswordRequest(BaseModel):
 
     @field_validator("new_password")
     def validate_new_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-
         if not any(char.isupper() for char in v):
             raise ValueError("Password must contain at least one uppercase letter")
 
@@ -90,12 +87,11 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     is_active: Optional[bool] = None
 
-    @field_validator("full_name")
+    @field_validator("full_name", mode="before")
     def validate_full_name(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        v = " ".join(v.split())
-        if not re.match(r"^[A-Za-z\s]+$", v):
+        if isinstance(v, str):
+            v = " ".join(v.split())
+        if v is not None and not re.match(r"^[A-Za-z\s]+$", v):
             raise ValueError("Full name must contain only alphabets and spaces")
         return v
 
