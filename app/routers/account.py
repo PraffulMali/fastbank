@@ -38,13 +38,8 @@ async def list_accounts(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)],
     paginator: Paginator = Depends(),
-    include_inactive: bool = Query(True, description="Include inactive accounts"),
 ):
-    return await AccountService.list_accounts(
-        db, current_user.tenant_id, paginator, include_inactive
-    )
-
-
+    return await AccountService.list_accounts(db, current_user.tenant_id, paginator)
 @router.get("/me", response_model=AccountUserResponse)
 async def get_my_accounts(
     db: Annotated[AsyncSession, Depends(get_db)],

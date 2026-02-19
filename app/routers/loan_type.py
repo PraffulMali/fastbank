@@ -40,19 +40,10 @@ async def list_loan_types(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
-    include_inactive: Optional[bool] = Query(
-        None, description="Include inactive items"
-    ),
 ):
-
-    if include_inactive is None:
-        include_inactive = current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
-
     return await LoanTypeService.list_loan_types(
-        db, current_user.tenant_id, paginator, include_inactive
+        db, current_user.tenant_id, paginator
     )
-
-
 @router.get("/{loan_type_id}", response_model=LoanTypeWithRateResponse)
 async def get_loan_type(
     loan_type_id: uuid.UUID,

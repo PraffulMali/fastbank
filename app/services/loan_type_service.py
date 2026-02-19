@@ -58,15 +58,9 @@ class LoanTypeService:
         db: AsyncSession,
         tenant_id: uuid.UUID,
         paginator: Paginator,
-        include_inactive: bool = False,
     ) -> Page:
         query = select(LoanType).where(LoanType.tenant_id == tenant_id)
-
-        if not include_inactive:
-            query = query.where(LoanType.is_active == True)
-
         query = query.order_by(LoanType.created_at.desc())
-
         return await paginator.paginate(db, query)
 
     @staticmethod

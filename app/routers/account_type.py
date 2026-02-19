@@ -42,16 +42,9 @@ async def list_account_types(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
-    include_inactive: Optional[bool] = Query(
-        None, description="Include inactive items"
-    ),
 ):
-
-    if include_inactive is None:
-        include_inactive = current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
-
     return await AccountTypeService.list_account_types(
-        db, current_user.tenant_id, paginator, include_inactive
+        db, current_user.tenant_id, paginator
     )
 
 

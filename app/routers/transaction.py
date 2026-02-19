@@ -74,17 +74,11 @@ async def list_transactions(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
-    include_inactive: Optional[bool] = Query(
-        None, description="Include inactive transactions"
-    ),
 ):
-
-    if include_inactive is None:
-        include_inactive = current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
 
     try:
         return await TransactionService.list_transactions(
-            db, current_user, paginator, include_inactive
+            db, current_user, paginator
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

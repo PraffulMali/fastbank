@@ -58,15 +58,9 @@ class AccountTypeService:
         db: AsyncSession,
         tenant_id: uuid.UUID,
         paginator: Paginator,
-        include_inactive: bool = False,
     ) -> Page:
         query = select(AccountType).where(AccountType.tenant_id == tenant_id)
-
-        if not include_inactive:
-            query = query.where(AccountType.is_active == True)
-
         query = query.order_by(AccountType.created_at.desc())
-
         return await paginator.paginate(db, query)
 
     @staticmethod

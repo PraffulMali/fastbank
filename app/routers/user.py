@@ -52,11 +52,8 @@ async def list_users(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_admin)],
     paginator: Paginator = Depends(),
-    include_inactive: bool = Query(True, description="Include inactive users"),
 ):
-    return await UserService.list_users(db, current_user, paginator, include_inactive)
-
-
+    return await UserService.list_users(db, current_user, paginator)
 @router.get("/{user_id}", response_model=Union[UserDetailResponse, UserSelfResponse])
 async def get_user(
     user_id: uuid.UUID,

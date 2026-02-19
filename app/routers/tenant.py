@@ -28,9 +28,8 @@ async def create_tenant(
 async def list_tenants(
     db: Annotated[AsyncSession, Depends(get_db)],
     paginator: Paginator = Depends(),
-    include_inactive: bool = Query(True, description="Include inactive tenants"),
 ):
-    return await TenantService.list_tenants(db, paginator, include_inactive)
+    return await TenantService.list_tenants(db, paginator)
 
 
 @router.get("/{tenant_id}", response_model=TenantResponse)

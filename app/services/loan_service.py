@@ -317,14 +317,14 @@ class LoanService:
         db: AsyncSession,
         user_id: uuid.UUID,
         tenant_id: uuid.UUID,
-        include_inactive: bool = False,
     ) -> List[Loan]:
         query = select(Loan).where(
-            and_(Loan.user_id == user_id, Loan.tenant_id == tenant_id)
+            and_(
+                Loan.user_id == user_id,
+                Loan.tenant_id == tenant_id,
+                Loan.is_active == True,
+            )
         )
-
-        if not include_inactive:
-            query = query.where(Loan.is_active == True)
 
         query = query.order_by(Loan.applied_at.desc())
 
@@ -336,12 +336,8 @@ class LoanService:
         db: AsyncSession,
         tenant_id: uuid.UUID,
         status: Optional[LoanStatus] = None,
-        include_inactive: bool = False,
     ) -> List[Loan]:
         query = select(Loan).where(Loan.tenant_id == tenant_id)
-
-        if not include_inactive:
-            query = query.where(Loan.is_active == True)
 
         if status:
             query = query.where(Loan.status == status)

@@ -112,39 +112,35 @@ class AccountService:
         db: AsyncSession,
         user_id: uuid.UUID,
         tenant_id: uuid.UUID,
-        include_inactive: bool = False,
     ) -> List[Account]:
         query = select(Account).where(
-            and_(Account.user_id == user_id, Account.tenant_id == tenant_id)
+            and_(
+                Account.user_id == user_id,
+                Account.tenant_id == tenant_id,
+                Account.is_active == True,
+            )
         )
-
-        if not include_inactive:
-            query = query.where(Account.is_active.is_(True))
 
         result = await db.execute(query)
         return list(result.scalars().all())
 
     @staticmethod
-    def get_accounts_query(tenant_id: uuid.UUID, include_inactive: bool = False):
-        query = select(Account).where(Account.tenant_id == tenant_id)
-        if not include_inactive:
-            query = query.where(Account.is_active.is_(True))
-        return query
+    def get_accounts_query(tenant_id: uuid.UUID):
+        return select(Account).where(Account.tenant_id == tenant_id)
 
     @staticmethod
     async def list_accounts(
         db: AsyncSession,
         tenant_id: uuid.UUID,
         paginator: Paginator,
-        include_inactive: bool = False,
     ) -> Page:
-        query = AccountService.get_accounts_query(tenant_id, include_inactive)
+        query = AccountService.get_accounts_query(tenant_id)
         return await paginator.paginate(db, query)
 
     @staticmethod
     async def get_my_accounts(db: AsyncSession, current_user: User):
         accounts = await AccountService.list_user_accounts(
-            db, current_user.id, current_user.tenant_id, include_inactive=False
+            db, current_user.id, current_user.tenant_id
         )
 
         return {

@@ -85,17 +85,14 @@ class TenantService:
         return tenant
 
     @staticmethod
-    def get_tenants_query(include_inactive: bool = False):
-        query = select(Tenant)
-        if not include_inactive:
-            query = query.where(Tenant.is_active.is_(True))
-        return query
+    def get_tenants_query():
+        return select(Tenant)
 
     @staticmethod
     async def list_tenants(
-        db: AsyncSession, paginator: Paginator, include_inactive: bool = False
+        db: AsyncSession, paginator: Paginator
     ) -> Page:
-        query = TenantService.get_tenants_query(include_inactive)
+        query = TenantService.get_tenants_query()
         return await paginator.paginate(db, query)
 
     @staticmethod

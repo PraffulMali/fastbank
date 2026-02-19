@@ -296,24 +296,18 @@ class UserService:
             raise ValueError("Unauthorized to create users")
 
     @staticmethod
-    def get_users_query(current_user: User, include_inactive: bool = False):
+    def get_users_query(current_user: User):
         if current_user.role == UserRole.SUPER_ADMIN:
-            query = select(User).where(User.role == UserRole.ADMIN)
-        else:
-            query = select(User).where(User.tenant_id == current_user.tenant_id)
-
-        if not include_inactive:
-            query = query.where(User.is_active.is_(True))
-        return query
+            return select(User).where(User.role == UserRole.ADMIN)
+        return select(User).where(User.tenant_id == current_user.tenant_id)
 
     @staticmethod
     async def list_users(
         db: AsyncSession,
         current_user: User,
         paginator: Paginator,
-        include_inactive: bool = False,
     ) -> Page:
-        query = UserService.get_users_query(current_user, include_inactive)
+        query = UserService.get_users_query(current_user)
         return await paginator.paginate(db, query)
 
     @staticmethod

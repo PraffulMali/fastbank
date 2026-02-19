@@ -251,13 +251,9 @@ class TransactionService:
 
     @staticmethod
     def get_tenant_transactions_query(
-        tenant_id: uuid.UUID, include_inactive: bool = False
+        tenant_id: uuid.UUID
     ):
         query = select(Transaction).where(Transaction.tenant_id == tenant_id)
-
-        if not include_inactive:
-            query = query.where(Transaction.is_active.is_(True))
-
         return query.order_by(Transaction.created_at.desc())
 
     @staticmethod
@@ -265,13 +261,12 @@ class TransactionService:
         db: AsyncSession,
         current_user: User,
         paginator: Paginator,
-        include_inactive: bool = False,
     ) -> Page:
         if current_user.role == UserRole.USER:
             query = TransactionService.get_user_transactions_query(current_user)
         elif current_user.role == UserRole.ADMIN:
             query = TransactionService.get_tenant_transactions_query(
-                current_user.tenant_id, include_inactive
+                current_user.tenant_id
             )
         else:
             raise PermissionError("Invalid role for transaction access")
