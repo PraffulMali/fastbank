@@ -18,11 +18,6 @@ class LoanCreate(BaseModel):
         ..., min_length=10, max_length=500, description="Purpose of loan"
     )
 
-    @field_validator("principal_amount")
-    def validate_principal(cls, v: Decimal) -> Decimal:
-        if v > Decimal("10000000.00"):
-            raise ValueError("Principal amount cannot exceed ₹1,00,00,000")
-        return v
 
     @field_validator("loan_purpose", mode="before")
     def validate_purpose(cls, v: str) -> str:
@@ -41,12 +36,6 @@ class LoanApprovalDecision(BaseModel):
     def validate_decision(cls, v: str) -> str:
         if isinstance(v, str):
             v = v.upper()
-        return v
-
-    @field_validator("rejection_reason")
-    def validate_rejection_reason(cls, v: Optional[str], info) -> Optional[str]:
-        if info.data.get("decision") == "REJECTED" and not v:
-            raise ValueError("Rejection reason is required when rejecting a loan")
         return v
 
 
@@ -136,12 +125,6 @@ class AdvanceLoanRepaymentRequest(BaseModel):
     payment_amount: Decimal = Field(
         ..., gt=0, decimal_places=2, description="Payment amount in rupees"
     )
-
-    @field_validator("payment_amount")
-    def validate_payment_amount(cls, v: Decimal) -> Decimal:
-        if v > Decimal("100000000.00"):
-            raise ValueError("Payment amount cannot exceed ₹10,00,00,000")
-        return v
 
 
 class AdvanceLoanRepaymentResponse(BaseModel):

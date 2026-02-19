@@ -246,6 +246,9 @@ class LoanService:
             new_balance = account.balance
 
         else:
+            if not decision.rejection_reason:
+                raise ValueError("Rejection reason is required when rejecting a loan")
+
             loan.status = LoanStatus.REJECTED
             loan.decided_by = admin_id
             loan.decided_at = datetime.now(timezone.utc)

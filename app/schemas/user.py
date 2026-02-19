@@ -22,12 +22,6 @@ class UserCreateBySuperAdmin(UserBase):
     tenant_id: uuid.UUID
     role: str = Field(default="ADMIN")
 
-    @field_validator("role")
-    def validate_role(cls, v: str) -> str:
-        if v != "ADMIN":
-            raise ValueError("SUPER_ADMIN can only create ADMIN users")
-        return v
-
 
 class UserCreateByAdmin(UserBase):
     phone_number: str = Field(..., min_length=10, max_length=20)

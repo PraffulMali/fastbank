@@ -159,6 +159,8 @@ class UserService:
     async def create_user_by_super_admin(
         db: AsyncSession, user_in: UserCreateBySuperAdmin
     ) -> tuple[User, str, str]:
+        if user_in.role != "ADMIN":
+            raise ValueError("SUPER_ADMIN can only create ADMIN users")
         tenant = await db.get(Tenant, user_in.tenant_id)
         if not tenant:
             raise ValueError("Tenant not found")

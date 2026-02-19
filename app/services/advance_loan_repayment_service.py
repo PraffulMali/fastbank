@@ -142,6 +142,9 @@ class AdvanceLoanRepaymentService:
 
             payment_amount_paisa = int(payment_amount_rupees * 100)
 
+            if payment_amount_rupees > Decimal("100000000.00"):
+                return (False, "Payment amount cannot exceed ₹10,00,00,000", None)
+
             if payment_amount_paisa <= 0:
                 return (False, "Payment amount must be greater than zero", None)
 
