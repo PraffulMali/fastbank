@@ -1,7 +1,6 @@
 from typing import Dict, List
 import uuid
 from fastapi import WebSocket
-import json
 import logging
 
 logger = logging.getLogger(__name__)
