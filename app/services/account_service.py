@@ -1,7 +1,6 @@
 from typing import Optional, List
 import uuid
 from datetime import datetime, timezone
-from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 import logging
@@ -10,7 +9,6 @@ import string
 
 from app.models.account import Account
 from app.models.user import User
-from app.models.enums import UserRole
 from app.models.account_type import AccountType
 from app.utils.pagination import Paginator, Page
 from app.schemas.account import (
@@ -114,14 +112,14 @@ class AccountService:
         db: AsyncSession,
         user_id: uuid.UUID,
         tenant_id: uuid.UUID,
-        include_inactive: bool = False,
     ) -> List[Account]:
         query = select(Account).where(
-            and_(Account.user_id == user_id, Account.tenant_id == tenant_id)
+            and_(
+                Account.user_id == user_id,
+                Account.tenant_id == tenant_id,
+                Account.is_active == True,
+            )
         )
-
-        if not include_inactive:
-            query = query.where(Account.is_active == True)
 
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -132,7 +130,9 @@ class AccountService:
 
     @staticmethod
     async def list_accounts(
-        db: AsyncSession, tenant_id: uuid.UUID, paginator: Paginator
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        paginator: Paginator,
     ) -> Page:
         query = AccountService.get_accounts_query(tenant_id)
         return await paginator.paginate(db, query)
@@ -140,7 +140,7 @@ class AccountService:
     @staticmethod
     async def get_my_accounts(db: AsyncSession, current_user: User):
         accounts = await AccountService.list_user_accounts(
-            db, current_user.id, current_user.tenant_id, include_inactive=False
+            db, current_user.id, current_user.tenant_id
         )
 
         return {

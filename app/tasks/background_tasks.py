@@ -1,7 +1,6 @@
 import uuid
 import asyncio
 import logging
-from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
@@ -22,8 +21,6 @@ class TransactionBackgroundTasks:
     async def process_transfer(reference_id: uuid.UUID):
         async with AsyncSessionLocal() as db:
             try:
-                await asyncio.sleep(5)
-
                 async with db.begin():
 
                     query = select(Transaction).where(

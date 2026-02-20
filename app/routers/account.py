@@ -1,11 +1,10 @@
 from typing import Annotated
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
-from app.models.enums import UserRole
 from app.schemas.account import (
     AccountCreateByAdmin,
     AccountUpdate,
@@ -13,7 +12,7 @@ from app.schemas.account import (
     AccountUserResponse,
 )
 from app.services.account_service import AccountService
-from app.dependencies import get_current_user, require_tenant_admin, require_user
+from app.dependencies import require_tenant_admin, require_user
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/accounts", tags=["Accounts"])
@@ -41,8 +40,6 @@ async def list_accounts(
     paginator: Paginator = Depends(),
 ):
     return await AccountService.list_accounts(db, current_user.tenant_id, paginator)
-
-
 @router.get("/me", response_model=AccountUserResponse)
 async def get_my_accounts(
     db: Annotated[AsyncSession, Depends(get_db)],

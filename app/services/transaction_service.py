@@ -2,11 +2,8 @@ from typing import Optional, Tuple
 import uuid
 from fastapi import BackgroundTasks
 import logging
-from decimal import Decimal
-from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
-import asyncio
+from sqlalchemy import select, and_
 
 from app.models.transaction import Transaction
 from app.models.account import Account
@@ -43,6 +40,7 @@ class TransactionService:
         source_query = select(Account).where(
             and_(
                 Account.account_number == transfer_request.source_account_number,
+                Account.tenant_id == current_user.tenant_id,
                 Account.is_active == True,
             )
         )
@@ -182,16 +180,16 @@ class TransactionService:
         return await db.get(Transaction, transaction_id)
 
     @staticmethod
-    async def get_transaction_detail_with_counterparty(
-        db: AsyncSession, transaction_id: uuid.UUID
-    ) -> Optional[TransactionDetailResponse]:
-        transaction = await db.get(Transaction, transaction_id)
-        if not transaction:
-            return None
+    async def get_transaction_detail_with_permissions(
+        db: AsyncSession, transaction_id: uuid.UUID, current_user: User
+    ) -> TransactionDetailResponse:
+        transaction = await TransactionService.verify_transaction_access(
+            db, transaction_id, current_user
+        )
 
         account = await db.get(Account, transaction.account_id)
         if not account:
-            return None
+            raise ValueError("Account not found for transaction")
 
         counterparty = None
 
@@ -252,16 +250,17 @@ class TransactionService:
         )
 
     @staticmethod
-    def get_tenant_transactions_query(tenant_id: uuid.UUID):
-        return (
-            select(Transaction)
-            .where(Transaction.tenant_id == tenant_id)
-            .order_by(Transaction.created_at.desc())
-        )
+    def get_tenant_transactions_query(
+        tenant_id: uuid.UUID
+    ):
+        query = select(Transaction).where(Transaction.tenant_id == tenant_id)
+        return query.order_by(Transaction.created_at.desc())
 
     @staticmethod
     async def list_transactions(
-        db: AsyncSession, current_user: User, paginator: Paginator
+        db: AsyncSession,
+        current_user: User,
+        paginator: Paginator,
     ) -> Page:
         if current_user.role == UserRole.USER:
             query = TransactionService.get_user_transactions_query(current_user)

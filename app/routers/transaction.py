@@ -1,6 +1,6 @@
-from typing import Annotated
+from typing import Annotated, Optional
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -14,7 +14,7 @@ from app.schemas.transaction import (
     TransactionDetailResponse,
 )
 from app.services.transaction_service import TransactionService
-from app.dependencies import get_current_user, require_user, require_tenant_member
+from app.dependencies import require_user, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
@@ -77,7 +77,9 @@ async def list_transactions(
 ):
 
     try:
-        return await TransactionService.list_transactions(db, current_user, paginator)
+        return await TransactionService.list_transactions(
+            db, current_user, paginator
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except PermissionError as e:
@@ -92,22 +94,9 @@ async def get_transaction(
 ):
 
     try:
-        await TransactionService.verify_transaction_access(
+        return await TransactionService.get_transaction_detail_with_permissions(
             db, transaction_id, current_user
         )
-
-        transaction_detail = (
-            await TransactionService.get_transaction_detail_with_counterparty(
-                db, transaction_id
-            )
-        )
-
-        if not transaction_detail:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found"
-            )
-
-        return transaction_detail
 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

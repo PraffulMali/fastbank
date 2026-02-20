@@ -1,6 +1,3 @@
-from app.config.settings import settings
-
-
 class EmailTemplates:
     @staticmethod
     def get_verification_email(

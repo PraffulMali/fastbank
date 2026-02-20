@@ -9,7 +9,6 @@ from sqlalchemy import (
     BigInteger,
     ForeignKey,
     CheckConstraint,
-    Index,
     Enum as SQLEnum,
     DateTime,
 )
@@ -24,6 +23,7 @@ if TYPE_CHECKING:
     from app.models.tenant import Tenant
     from app.models.user import User
     from app.models.account import Account
+    from app.models.loan_repayment import LoanRepayment
 
 
 class Loan(BaseModel):
@@ -106,6 +106,13 @@ class Loan(BaseModel):
     )
     decision_maker: Mapped["User | None"] = relationship(
         "User", foreign_keys=[decided_by], lazy="selectin"
+    )
+
+    loan_repayments: Mapped[list["LoanRepayment"]] = relationship(
+        "LoanRepayment",
+        back_populates="loan",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     __table_args__ = (

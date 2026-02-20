@@ -9,11 +9,10 @@ class AccountTypeCreate(BaseModel):
         ..., min_length=2, max_length=100, description="Account type name"
     )
 
-    @field_validator("name")
+    @field_validator("name", mode="before")
     def validate_name(cls, v: str) -> str:
-        v = " ".join(v.split())
-        if len(v) < 2:
-            raise ValueError("Account type name must be at least 2 characters")
+        if isinstance(v, str):
+            return " ".join(v.split())
         return v
 
 
@@ -21,13 +20,10 @@ class AccountTypeUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     is_active: Optional[bool] = None
 
-    @field_validator("name")
+    @field_validator("name", mode="before")
     def validate_name(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        v = " ".join(v.split())
-        if len(v) < 2:
-            raise ValueError("Account type name must be at least 2 characters")
+        if isinstance(v, str):
+            return " ".join(v.split())
         return v
 
 

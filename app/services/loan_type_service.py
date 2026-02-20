@@ -41,25 +41,26 @@ class LoanTypeService:
         return new_loan_type
 
     @staticmethod
-    async def get_loan_type_by_id(
-        db: AsyncSession, loan_type_id: uuid.UUID
-    ) -> Optional[LoanType]:
-        return await db.get(LoanType, loan_type_id)
+    async def get_loan_type_with_permissions(
+        db: AsyncSession, loan_type_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> LoanType:
+        loan_type = await db.get(LoanType, loan_type_id)
+        if not loan_type:
+            raise ValueError("Loan type not found")
+
+        if loan_type.tenant_id != tenant_id:
+            raise PermissionError("Cannot access loan type from different tenant")
+
+        return loan_type
 
     @staticmethod
     async def list_loan_types(
         db: AsyncSession,
         tenant_id: uuid.UUID,
         paginator: Paginator,
-        include_inactive: bool = False,
     ) -> Page:
         query = select(LoanType).where(LoanType.tenant_id == tenant_id)
-
-        if not include_inactive:
-            query = query.where(LoanType.is_active == True)
-
         query = query.order_by(LoanType.created_at.desc())
-
         return await paginator.paginate(db, query)
 
     @staticmethod
@@ -69,12 +70,9 @@ class LoanTypeService:
         loan_type_update: LoanTypeUpdate,
         tenant_id: uuid.UUID,
     ) -> Optional[LoanType]:
-        loan_type = await db.get(LoanType, loan_type_id)
-        if not loan_type:
-            return None
-
-        if loan_type.tenant_id != tenant_id:
-            raise PermissionError("Cannot update loan type from different tenant")
+        loan_type = await LoanTypeService.get_loan_type_with_permissions(
+            db, loan_type_id, tenant_id
+        )
 
         if loan_type_update.name is not None:
             duplicate_query = select(LoanType).where(
@@ -106,12 +104,9 @@ class LoanTypeService:
     async def delete_loan_type(
         db: AsyncSession, loan_type_id: uuid.UUID, tenant_id: uuid.UUID
     ) -> None:
-        loan_type = await db.get(LoanType, loan_type_id)
-        if not loan_type:
-            raise ValueError("Loan type not found")
-
-        if loan_type.tenant_id != tenant_id:
-            raise PermissionError("Cannot delete loan type from different tenant")
+        loan_type = await LoanTypeService.get_loan_type_with_permissions(
+            db, loan_type_id, tenant_id
+        )
 
         loans_query = (
             select(func.count())
@@ -147,10 +142,10 @@ class LoanTypeService:
     @staticmethod
     async def get_loan_type_with_rate(
         db: AsyncSession, loan_type_id: uuid.UUID, tenant_id: uuid.UUID
-    ) -> Optional[dict]:
-        loan_type = await db.get(LoanType, loan_type_id)
-        if not loan_type or loan_type.tenant_id != tenant_id:
-            return None
+    ) -> dict:
+        loan_type = await LoanTypeService.get_loan_type_with_permissions(
+            db, loan_type_id, tenant_id
+        )
 
         rate_query = (
             select(InterestRule)

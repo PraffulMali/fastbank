@@ -6,17 +6,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 from sqlalchemy import select, and_
 
+from app.services.notification_service import NotificationService
 from app.models.loan import Loan
 from app.models.loan_type import LoanType
 from app.models.interest_rule import InterestRule
 from app.models.account import Account
 from app.models.user import User
-from app.models.enums import LoanStatus, UserRole, RuleType
+from app.models.enums import (
+    LoanStatus,
+    UserRole,
+    RuleType,
+    NotificationType,
+    TransactionType,
+    TransactionStatus,
+    ReferenceType,
+)
+from app.models.transaction import Transaction
+from app.constants import MAX_LOAN_AMOUNT, MIN_LOAN_AMOUNT
+
 from app.schemas.loan import LoanCreate, LoanApprovalDecision
-
-MAX_LOAN_AMOUNT = Decimal("10000000.00")
-MIN_LOAN_AMOUNT = Decimal("10000.00")
-
 
 logger = logging.getLogger(__name__)
 
@@ -155,9 +163,6 @@ class LoanService:
         await db.commit()
         await db.refresh(new_loan)
 
-        from app.services.notification_service import NotificationService
-        from app.models.enums import NotificationType
-
         user = await db.get(User, user_id)
 
         await NotificationService.create_notification(
@@ -203,24 +208,10 @@ class LoanService:
         admin_id: uuid.UUID,
         tenant_id: uuid.UUID,
     ) -> Loan:
-        loan = await db.get(Loan, loan_id)
-        if not loan:
-            raise ValueError("Loan not found")
-
-        if loan.tenant_id != tenant_id:
-            raise ValueError("Cannot process loan from different tenant")
+        loan = await LoanService.get_loan_with_permissions(db, loan_id, tenant_id)
 
         if loan.status != LoanStatus.APPLIED:
             raise ValueError(f"Cannot process loan with status {loan.status.value}")
-
-        from app.models.transaction import Transaction
-        from app.models.enums import (
-            TransactionType,
-            TransactionStatus,
-            ReferenceType,
-            NotificationType,
-        )
-        from app.services.notification_service import NotificationService
 
         loan_transaction_id = None
         account_number = None
@@ -255,6 +246,9 @@ class LoanService:
             new_balance = account.balance
 
         else:
+            if not decision.rejection_reason:
+                raise ValueError("Rejection reason is required when rejecting a loan")
+
             loan.status = LoanStatus.REJECTED
             loan.decided_by = admin_id
             loan.decided_at = datetime.now(timezone.utc)
@@ -309,22 +303,31 @@ class LoanService:
         return loan
 
     @staticmethod
-    async def get_loan_by_id(db: AsyncSession, loan_id: uuid.UUID) -> Optional[Loan]:
-        return await db.get(Loan, loan_id)
+    async def get_loan_with_permissions(
+        db: AsyncSession, loan_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> Loan:
+        loan = await db.get(Loan, loan_id)
+        if not loan:
+            raise ValueError("Loan not found")
+
+        if loan.tenant_id != tenant_id:
+            raise PermissionError("Cannot access loan from different tenant")
+
+        return loan
 
     @staticmethod
     async def list_user_loans(
         db: AsyncSession,
         user_id: uuid.UUID,
         tenant_id: uuid.UUID,
-        include_inactive: bool = False,
     ) -> List[Loan]:
         query = select(Loan).where(
-            and_(Loan.user_id == user_id, Loan.tenant_id == tenant_id)
+            and_(
+                Loan.user_id == user_id,
+                Loan.tenant_id == tenant_id,
+                Loan.is_active == True,
+            )
         )
-
-        if not include_inactive:
-            query = query.where(Loan.is_active == True)
 
         query = query.order_by(Loan.applied_at.desc())
 
@@ -333,7 +336,9 @@ class LoanService:
 
     @staticmethod
     async def list_tenant_loans(
-        db: AsyncSession, tenant_id: uuid.UUID, status: Optional[LoanStatus] = None
+        db: AsyncSession,
+        tenant_id: uuid.UUID,
+        status: Optional[LoanStatus] = None,
     ) -> List[Loan]:
         query = select(Loan).where(Loan.tenant_id == tenant_id)
 
@@ -346,10 +351,10 @@ class LoanService:
         return list(result.scalars().all())
 
     @staticmethod
-    async def soft_delete_loan(db: AsyncSession, loan_id: uuid.UUID) -> Optional[Loan]:
-        loan = await db.get(Loan, loan_id)
-        if not loan:
-            return None
+    async def soft_delete_loan(
+        db: AsyncSession, loan_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> Loan:
+        loan = await LoanService.get_loan_with_permissions(db, loan_id, tenant_id)
 
         if not loan.is_active:
             raise ValueError("Loan is already deleted")

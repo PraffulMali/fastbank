@@ -1,10 +1,11 @@
-from typing import Annotated
+from typing import Annotated, Optional
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
+from app.models.enums import UserRole
 from app.schemas.loan_type import (
     LoanTypeCreate,
     LoanTypeUpdate,
@@ -12,8 +13,7 @@ from app.schemas.loan_type import (
     LoanTypeWithRateResponse,
 )
 from app.services.loan_type_service import LoanTypeService
-from app.models.enums import UserRole
-from app.dependencies import require_admin, require_tenant_admin, require_tenant_member
+from app.dependencies import require_tenant_admin, require_tenant_member
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/loan-types", tags=["Loan Types"])
@@ -40,14 +40,10 @@ async def list_loan_types(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_member)],
     paginator: Paginator = Depends(),
-    include_inactive: bool = False,
 ):
-
     return await LoanTypeService.list_loan_types(
-        db, current_user.tenant_id, paginator, include_inactive
+        db, current_user.tenant_id, paginator
     )
-
-
 @router.get("/{loan_type_id}", response_model=LoanTypeWithRateResponse)
 async def get_loan_type(
     loan_type_id: uuid.UUID,
@@ -55,16 +51,14 @@ async def get_loan_type(
     current_user: Annotated[User, Depends(require_tenant_member)],
 ):
 
-    loan_type = await LoanTypeService.get_loan_type_with_rate(
-        db, loan_type_id, current_user.tenant_id
-    )
-
-    if not loan_type:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Loan type not found"
+    try:
+        return await LoanTypeService.get_loan_type_with_rate(
+            db, loan_type_id, current_user.tenant_id
         )
-
-    return loan_type
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.patch("/{loan_type_id}", response_model=LoanTypeResponse)
@@ -76,18 +70,13 @@ async def update_loan_type(
 ):
 
     try:
-        loan_type = await LoanTypeService.update_loan_type(
+        return await LoanTypeService.update_loan_type(
             db, loan_type_id, loan_type_update, current_user.tenant_id
         )
 
-        if not loan_type:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Loan type not found"
-            )
-
-        return loan_type
-
     except ValueError as e:
+        if str(e) == "Loan type not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
@@ -103,6 +92,8 @@ async def delete_loan_type(
     try:
         await LoanTypeService.delete_loan_type(db, loan_type_id, current_user.tenant_id)
     except ValueError as e:
+        if str(e) == "Loan type not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

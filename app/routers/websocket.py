@@ -9,13 +9,9 @@ from fastapi import (
     status,
     HTTPException,
 )
-from jose import JWTError, jwt
 import logging
 
-from app.config.settings import settings
 from app.database import get_db
-from app.models.user import User
-from app.models.enums import UserRole
 from app.utils.websocket_manager import get_websocket_manager
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import verify_token_and_get_user

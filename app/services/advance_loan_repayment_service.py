@@ -3,7 +3,6 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from fastapi import BackgroundTasks
 import logging
 import math
@@ -63,7 +62,6 @@ class AdvanceLoanRepaymentService:
 
         if principal_component > remaining_principal:
             principal_component = remaining_principal
-            interest_component = payment_amount - principal_component
 
         remaining_after = remaining_principal - principal_component
 
@@ -144,6 +142,9 @@ class AdvanceLoanRepaymentService:
 
             payment_amount_paisa = int(payment_amount_rupees * 100)
 
+            if payment_amount_rupees > Decimal("100000000.00"):
+                return (False, "Payment amount cannot exceed ₹10,00,00,000", None)
+
             if payment_amount_paisa <= 0:
                 return (False, "Payment amount must be greater than zero", None)
 
@@ -189,6 +190,9 @@ class AdvanceLoanRepaymentService:
                 )
             )
 
+            actual_deduction_paisa = interest_component + principal_component
+            actual_deduction_rupees = Decimal(actual_deduction_paisa) / 100
+
             is_foreclosure = remaining_after == 0
             new_status = (
                 LoanStatus.FORECLOSED if is_foreclosure else LoanStatus.APPROVED
@@ -220,13 +224,13 @@ class AdvanceLoanRepaymentService:
                     reference_id=loan_id,
                     transaction_type=TransactionType.DEBIT,
                     reference_type=ReferenceType.LOAN,
-                    amount=payment_amount_paisa,
+                    amount=actual_deduction_paisa,
                     status=TransactionStatus.SUCCESS,
                 )
 
                 db.add(repayment_transaction)
 
-                account.balance -= payment_amount_paisa
+                account.balance -= actual_deduction_paisa
 
                 loan.remaining_principal = remaining_after
                 loan.tenure_months = new_tenure
@@ -239,7 +243,7 @@ class AdvanceLoanRepaymentService:
                     tenant_id=tenant_id,
                     loan_id=loan_id,
                     transaction_id=transaction_id,
-                    amount_paid=payment_amount_paisa,
+                    amount_paid=actual_deduction_paisa,
                     principal_component=principal_component,
                     interest_component=interest_component,
                     payment_date=datetime.now(timezone.utc),
@@ -255,9 +259,12 @@ class AdvanceLoanRepaymentService:
             await db.refresh(account)
 
             if is_foreclosure:
-                message = f"Congratulations! Your loan has been fully repaid. Payment of ₹{payment_amount_rupees:,.2f} (Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}) has been processed. Your loan is now FORECLOSED."
+                message = f"Congratulations! Your loan has been fully repaid. Payment of ₹{actual_deduction_rupees:,.2f} (Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}) has been processed. Your loan is now FORECLOSED."
+                if actual_deduction_paisa < payment_amount_paisa:
+                    refund_amount = payment_amount_rupees - actual_deduction_rupees
+                    message += f" An excess payment of ₹{refund_amount:,.2f} was not deducted from your account."
             else:
-                message = f"Advance repayment of ₹{payment_amount_rupees:,.2f} processed successfully. Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}. Remaining principal: ₹{remaining_after / 100:,.2f}. New tenure: {new_tenure} months."
+                message = f"Advance repayment of ₹{actual_deduction_rupees:,.2f} processed successfully. Principal: ₹{principal_component / 100:,.2f}, Interest: ₹{interest_component / 100:,.2f}. Remaining principal: ₹{remaining_after / 100:,.2f}. New tenure: {new_tenure} months."
 
             await NotificationService.create_notification(
                 db=db,
@@ -271,7 +278,8 @@ class AdvanceLoanRepaymentService:
             )
 
             details = {
-                "payment_amount": payment_amount_rupees,
+                "payment_amount": actual_deduction_rupees,
+                "requested_amount": payment_amount_rupees,
                 "interest_component": interest_component / 100,
                 "principal_component": principal_component / 100,
                 "old_remaining_principal": old_remaining / 100,

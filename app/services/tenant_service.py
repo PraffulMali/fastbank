@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,25 +78,28 @@ class TenantService:
         return new_tenant
 
     @staticmethod
-    async def get_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> Optional[Tenant]:
-        return await db.get(Tenant, tenant_id)
+    async def get_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant:
+        tenant = await db.get(Tenant, tenant_id)
+        if not tenant:
+            raise ValueError("Tenant not found")
+        return tenant
 
     @staticmethod
     def get_tenants_query():
         return select(Tenant)
 
     @staticmethod
-    async def list_tenants(db: AsyncSession, paginator: Paginator) -> Page:
+    async def list_tenants(
+        db: AsyncSession, paginator: Paginator
+    ) -> Page:
         query = TenantService.get_tenants_query()
         return await paginator.paginate(db, query)
 
     @staticmethod
     async def update_tenant(
         db: AsyncSession, tenant_id: uuid.UUID, tenant_update: TenantUpdate
-    ) -> Optional[Tenant]:
-        tenant = await db.get(Tenant, tenant_id)
-        if not tenant:
-            return None
+    ) -> Tenant:
+        tenant = await TenantService.get_tenant(db, tenant_id)
 
         if tenant_update.name is not None and tenant_update.name != tenant.name:
             query = select(Tenant).where(Tenant.name == tenant_update.name)
@@ -117,12 +120,10 @@ class TenantService:
         return tenant
 
     @staticmethod
-    async def soft_delete_tenant(
-        db: AsyncSession, tenant_id: uuid.UUID
-    ) -> Optional[Tenant]:
-        tenant = await db.get(Tenant, tenant_id)
-        if not tenant:
-            return None
+    async def soft_delete_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant:
+        from app.celery.tasks import cascade_soft_delete_tenant
+
+        tenant = await TenantService.get_tenant(db, tenant_id)
 
         if not tenant.is_active:
             raise ValueError("Tenant is already deleted")
@@ -132,4 +133,7 @@ class TenantService:
 
         await db.commit()
         await db.refresh(tenant)
+
+        cascade_soft_delete_tenant.delay(str(tenant_id))
+
         return tenant

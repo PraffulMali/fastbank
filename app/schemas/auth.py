@@ -35,9 +35,6 @@ class ResetPasswordRequest(BaseModel):
 
     @field_validator("new_password")
     def validate_new_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-
         if not any(char.isupper() for char in v):
             raise ValueError("Password must contain at least one uppercase letter")
 

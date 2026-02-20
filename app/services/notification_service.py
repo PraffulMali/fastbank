@@ -1,12 +1,11 @@
-from typing import List, Optional
+from typing import Optional
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, update
 from datetime import datetime
 
 from app.models.notification import Notification
 from app.models.enums import NotificationType
-from app.models.user import User
 from app.utils.pagination import Paginator, Page
 from app.utils.websocket_manager import get_websocket_manager
 
@@ -23,6 +22,7 @@ class NotificationService:
         reference_id: Optional[uuid.UUID] = None,
         reference_type: Optional[str] = None,
         send_websocket: bool = True,
+        commit: bool = True,
     ) -> Notification:
         notification = Notification(
             tenant_id=tenant_id,
@@ -35,8 +35,11 @@ class NotificationService:
         )
 
         db.add(notification)
-        await db.commit()
-        await db.refresh(notification)
+        if commit:
+            await db.commit()
+            await db.refresh(notification)
+        else:
+            await db.flush()
 
         if send_websocket:
             await NotificationService.send_websocket_notification(notification)
@@ -73,7 +76,9 @@ class NotificationService:
         paginator: Paginator,
         unread_only: bool = False,
     ) -> Page:
-        query = select(Notification).where(Notification.user_id == user_id)
+        query = select(Notification).where(
+            and_(Notification.user_id == user_id, Notification.is_active == True)
+        )
 
         if unread_only:
             query = query.where(Notification.is_read == False)
@@ -87,7 +92,13 @@ class NotificationService:
         query = (
             select(func.count())
             .select_from(Notification)
-            .where(and_(Notification.user_id == user_id, Notification.is_read == False))
+            .where(
+                and_(
+                    Notification.user_id == user_id,
+                    Notification.is_read == False,
+                    Notification.is_active == True,
+                )
+            )
         )
         result = await db.execute(query)
         return result.scalar_one()
@@ -99,7 +110,7 @@ class NotificationService:
         notification = await db.get(Notification, notification_id)
 
         if not notification:
-            return None
+            raise ValueError("Notification not found")
 
         if notification.user_id != user_id:
             raise PermissionError("Cannot mark another user's notification as read")
@@ -112,11 +123,16 @@ class NotificationService:
 
     @staticmethod
     async def mark_all_as_read(db: AsyncSession, user_id: uuid.UUID) -> int:
-        from sqlalchemy import update
 
         stmt = (
             update(Notification)
-            .where(and_(Notification.user_id == user_id, Notification.is_read == False))
+            .where(
+                and_(
+                    Notification.user_id == user_id,
+                    Notification.is_read == False,
+                    Notification.is_active == True,
+                )
+            )
             .values(is_read=True)
         )
 
@@ -132,7 +148,7 @@ class NotificationService:
         notification = await db.get(Notification, notification_id)
 
         if not notification:
-            return False
+            raise ValueError("Notification not found")
 
         if notification.user_id != user_id:
             raise PermissionError("Cannot delete another user's notification")

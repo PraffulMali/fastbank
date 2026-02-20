@@ -2,10 +2,11 @@ from typing import Annotated, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.database import get_db
 from app.models.user import User
-from app.models.enums import UserRole, LoanStatus
+from app.models.enums import LoanStatus
 from app.schemas.loan import (
     LoanCreate,
     LoanApprovalDecision,
@@ -16,9 +17,10 @@ from app.schemas.loan import (
     LoanRepaymentResponse,
 )
 from app.models.loan_repayment import LoanRepayment
+from app.models.loan import Loan
 from app.services.loan_service import LoanService
 from app.services.advance_loan_repayment_service import AdvanceLoanRepaymentService
-from app.dependencies import get_current_user, require_tenant_admin, require_user
+from app.dependencies import require_tenant_admin, require_user
 from app.utils.pagination import Paginator, Page
 
 router = APIRouter(prefix="/loans", tags=["Loans"])
@@ -46,7 +48,7 @@ async def get_my_loans(
     current_user: Annotated[User, Depends(require_user)],
 ):
     loans = await LoanService.list_user_loans(
-        db, current_user.id, current_user.tenant_id, include_inactive=False
+        db, current_user.id, current_user.tenant_id
     )
 
     return loans
@@ -61,8 +63,6 @@ async def list_loans(
     ),
     paginator: Paginator = Depends(),
 ):
-    from sqlalchemy import select
-    from app.models.loan import Loan
 
     query = select(Loan).where(Loan.tenant_id == current_user.tenant_id)
 
@@ -87,19 +87,14 @@ async def get_loan(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)],
 ):
-    loan = await LoanService.get_loan_by_id(db, loan_id)
-    if not loan:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Loan not found"
+    try:
+        return await LoanService.get_loan_with_permissions(
+            db, loan_id, current_user.tenant_id
         )
-
-    if loan.tenant_id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot view loan from different tenant",
-        )
-
-    return loan
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.post("/{loan_id}/decision", response_model=LoanResponse)
@@ -109,18 +104,6 @@ async def process_loan_application(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)],
 ):
-    loan = await LoanService.get_loan_by_id(db, loan_id)
-    if not loan:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Loan not found"
-        )
-
-    if loan.tenant_id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot process loan from different tenant",
-        )
-
     try:
         updated_loan = await LoanService.approve_or_reject_loan(
             db, loan_id, decision, current_user.id, current_user.tenant_id
@@ -128,7 +111,11 @@ async def process_loan_application(
 
         return updated_loan
     except ValueError as e:
+        if str(e) == "Loan not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.delete("/{loan_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -137,22 +124,14 @@ async def delete_loan(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)],
 ):
-    loan = await LoanService.get_loan_by_id(db, loan_id)
-    if not loan:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Loan not found"
-        )
-
-    if loan.tenant_id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot delete loan from different tenant",
-        )
-
     try:
-        await LoanService.soft_delete_loan(db, loan_id)
+        await LoanService.soft_delete_loan(db, loan_id, current_user.tenant_id)
     except ValueError as e:
+        if str(e) == "Loan not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.post(
@@ -191,19 +170,13 @@ async def list_loan_repayments(
     current_user: Annotated[User, Depends(require_tenant_admin)],
     paginator: Paginator = Depends(),
 ):
-    from sqlalchemy import select
 
-    loan = await LoanService.get_loan_by_id(db, loan_id)
-    if not loan:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Loan not found"
-        )
-
-    if loan.tenant_id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot view repayments for loan from different tenant",
-        )
+    try:
+        await LoanService.get_loan_with_permissions(db, loan_id, current_user.tenant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
     query = (
         select(LoanRepayment)
@@ -223,19 +196,13 @@ async def get_loan_repayment(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_tenant_admin)],
 ):
-    from sqlalchemy import select
 
-    loan = await LoanService.get_loan_by_id(db, loan_id)
-    if not loan:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Loan not found"
-        )
-
-    if loan.tenant_id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot view repayments for loan from different tenant",
-        )
+    try:
+        await LoanService.get_loan_with_permissions(db, loan_id, current_user.tenant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
     query = select(LoanRepayment).where(
         LoanRepayment.id == repayment_id, LoanRepayment.loan_id == loan_id

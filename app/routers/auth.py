@@ -1,5 +1,6 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi_limiter.depends import RateLimiter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -14,17 +15,28 @@ from app.schemas.auth import (
     ResendVerificationRequest,
 )
 from app.services.user_service import UserService
-from app.dependencies import get_current_user, security
+from app.dependencies import security
 from app.services.email_service import EmailService
 from fastapi.security import HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from app.config.settings import settings
-from app.models.user import User
+from app.constants import (
+    ALGORITHM,
+    RATE_LIMIT_TIMES,
+    RATE_LIMIT_WINDOW_SECONDS,
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.post("/login", response_model=UserLoginResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/login",
+    response_model=UserLoginResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(RateLimiter(times=RATE_LIMIT_TIMES, seconds=RATE_LIMIT_WINDOW_SECONDS))
+    ],
+)
 async def login(login_data: UserLoginRequest, db: AsyncSession = Depends(get_db)):
     try:
         result = await UserService.login_user(db, login_data)
@@ -42,7 +54,12 @@ async def login(login_data: UserLoginRequest, db: AsyncSession = Depends(get_db)
 
 
 @router.post(
-    "/refresh", response_model=TokenRefreshResponse, status_code=status.HTTP_200_OK
+    "/refresh",
+    response_model=TokenRefreshResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(RateLimiter(times=RATE_LIMIT_TIMES, seconds=RATE_LIMIT_WINDOW_SECONDS))
+    ],
 )
 async def refresh_token(
     token_data: TokenRefreshRequest,
@@ -60,7 +77,7 @@ async def refresh_token(
                 payload = jwt.decode(
                     credentials.credentials,
                     settings.SECRET_KEY,
-                    algorithms=[settings.ALGORITHM],
+                    algorithms=[ALGORITHM],
                     options={"verify_exp": False},
                 )
                 access_token_jti = payload.get("jti")
@@ -92,8 +109,6 @@ async def refresh_token(
 async def logout(
     logout_data: UserLogoutRequest,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
 ):
     try:
         await UserService.blacklist_token(credentials.credentials)
@@ -106,18 +121,31 @@ async def logout(
         )
 
 
-@router.get("/verify-email", status_code=status.HTTP_200_OK)
-async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
-    success = await UserService.verify_user_email(db, token)
-    if not success:
+@router.get(
+    "/verify-email",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(RateLimiter(times=RATE_LIMIT_TIMES, seconds=RATE_LIMIT_WINDOW_SECONDS))
+    ],
+)
+async def verify_email(token: str, db: Annotated[AsyncSession, Depends(get_db)]):
+    try:
+        await UserService.verify_user_email(db, token)
+        return {"message": "Email verified successfully"}
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired verification token",
+            detail=str(e),
         )
-    return {"message": "Email verified successfully"}
 
 
-@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+@router.post(
+    "/forgot-password",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(RateLimiter(times=RATE_LIMIT_TIMES, seconds=RATE_LIMIT_WINDOW_SECONDS))
+    ],
+)
 async def forgot_password(
     request_data: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
@@ -139,24 +167,35 @@ async def forgot_password(
     }
 
 
-@router.post("/reset-password", status_code=status.HTTP_200_OK)
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(RateLimiter(times=RATE_LIMIT_TIMES, seconds=RATE_LIMIT_WINDOW_SECONDS))
+    ],
+)
 async def reset_password(
-    reset_data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
+    reset_data: ResetPasswordRequest, db: Annotated[AsyncSession, Depends(get_db)]
 ):
-    success = await UserService.reset_password_with_token(
-        db, reset_data.token, reset_data.new_password
-    )
-
-    if not success:
+    try:
+        await UserService.reset_password_with_token(
+            db, reset_data.token, reset_data.new_password
+        )
+        return {"message": "Password has been reset successfully"}
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset token",
+            detail=str(e),
         )
 
-    return {"message": "Password has been reset successfully"}
 
-
-@router.post("/resend-verification", status_code=status.HTTP_200_OK)
+@router.post(
+    "/resend-verification",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(RateLimiter(times=RATE_LIMIT_TIMES, seconds=RATE_LIMIT_WINDOW_SECONDS))
+    ],
+)
 async def resend_verification(
     request_data: ResendVerificationRequest,
     background_tasks: BackgroundTasks,

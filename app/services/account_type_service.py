@@ -41,25 +41,26 @@ class AccountTypeService:
         return new_account_type
 
     @staticmethod
-    async def get_account_type_by_id(
-        db: AsyncSession, account_type_id: uuid.UUID
-    ) -> Optional[AccountType]:
-        return await db.get(AccountType, account_type_id)
+    async def get_account_type_with_permissions(
+        db: AsyncSession, account_type_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> AccountType:
+        account_type = await db.get(AccountType, account_type_id)
+        if not account_type:
+            raise ValueError("Account type not found")
+
+        if account_type.tenant_id != tenant_id:
+            raise PermissionError("Cannot access account type from different tenant")
+
+        return account_type
 
     @staticmethod
     async def list_account_types(
         db: AsyncSession,
         tenant_id: uuid.UUID,
         paginator: Paginator,
-        include_inactive: bool = False,
     ) -> Page:
         query = select(AccountType).where(AccountType.tenant_id == tenant_id)
-
-        if not include_inactive:
-            query = query.where(AccountType.is_active == True)
-
         query = query.order_by(AccountType.created_at.desc())
-
         return await paginator.paginate(db, query)
 
     @staticmethod
@@ -69,12 +70,9 @@ class AccountTypeService:
         account_type_update: AccountTypeUpdate,
         tenant_id: uuid.UUID,
     ) -> Optional[AccountType]:
-        account_type = await db.get(AccountType, account_type_id)
-        if not account_type:
-            return None
-
-        if account_type.tenant_id != tenant_id:
-            raise PermissionError("Cannot update account type from different tenant")
+        account_type = await AccountTypeService.get_account_type_with_permissions(
+            db, account_type_id, tenant_id
+        )
 
         if account_type_update.name is not None:
             duplicate_query = select(AccountType).where(
@@ -108,12 +106,9 @@ class AccountTypeService:
     async def delete_account_type(
         db: AsyncSession, account_type_id: uuid.UUID, tenant_id: uuid.UUID
     ) -> None:
-        account_type = await db.get(AccountType, account_type_id)
-        if not account_type:
-            raise ValueError("Account type not found")
-
-        if account_type.tenant_id != tenant_id:
-            raise PermissionError("Cannot delete account type from different tenant")
+        account_type = await AccountTypeService.get_account_type_with_permissions(
+            db, account_type_id, tenant_id
+        )
 
         accounts_query = (
             select(func.count())
@@ -148,10 +143,10 @@ class AccountTypeService:
     @staticmethod
     async def get_account_type_with_rules(
         db: AsyncSession, account_type_id: uuid.UUID, tenant_id: uuid.UUID
-    ) -> Optional[dict]:
-        account_type = await db.get(AccountType, account_type_id)
-        if not account_type or account_type.tenant_id != tenant_id:
-            return None
+    ) -> dict:
+        account_type = await AccountTypeService.get_account_type_with_permissions(
+            db, account_type_id, tenant_id
+        )
 
         rules_query = (
             select(InterestRule)

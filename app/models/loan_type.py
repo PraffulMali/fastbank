@@ -8,7 +8,8 @@ from app.models.base import BaseModel
 
 if TYPE_CHECKING:
     from app.models.tenant import Tenant
-    from app.models.interest_rules import InterestRule
+    from app.models.interest_rule import InterestRule
+    from app.models.loan import Loan
 
 
 class LoanType(BaseModel):

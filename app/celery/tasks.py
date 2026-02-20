@@ -1,10 +1,8 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
-from sqlalchemy import select, func
+import uuid
 
 from app.celery.app import celery_app
-from app.models.user import User
 from app.database.session import AsyncSessionLocal
 from app.services.loan_repayment_service import LoanRepaymentService
 
@@ -70,4 +68,44 @@ async def _process_monthly_interest_accrual_task():
         except Exception as e:
             await db.rollback()
             logger.error(f"Interest Task Internal Error - Error={str(e)}")
+            raise
+
+
+@celery_app.task(name="app.celery.tasks.cascade_soft_delete_tenant")
+def cascade_soft_delete_tenant(tenant_id_str: str):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        tenant_id = uuid.UUID(tenant_id_str)
+        logger.info(
+            f"Cascade Delete Task Started - Action=Tenant_Soft_Delete | TenantID={tenant_id_str}"
+        )
+        stats = loop.run_until_complete(_cascade_soft_delete_tenant_task(tenant_id))
+        logger.info(
+            f"Cascade Delete Task Completed - Result=Success | TenantID={tenant_id_str} | Stats={stats}"
+        )
+        return stats
+    except Exception as e:
+        logger.error(
+            f"Cascade Delete Task Failed - Status=Error | TenantID={tenant_id_str} | Error={str(e)}"
+        )
+        raise
+    finally:
+        loop.close()
+
+
+async def _cascade_soft_delete_tenant_task(tenant_id: uuid.UUID):
+    from app.services.cascade_delete_service import CascadeDeleteService
+
+    async with AsyncSessionLocal() as db:
+        try:
+            stats = await CascadeDeleteService.cascade_soft_delete_tenant(db, tenant_id)
+            await db.commit()
+            return stats
+        except Exception as e:
+            await db.rollback()
+            logger.error(
+                f"Cascade Delete Tenant Internal Error - TenantID={tenant_id} | Error={str(e)}"
+            )
             raise

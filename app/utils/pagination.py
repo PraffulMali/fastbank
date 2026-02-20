@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar, List, Any
+from typing import Generic, TypeVar, List
 from math import ceil
 
 from fastapi import Query
@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select, func
 from sqlalchemy.sql import Select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.constants import DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
 T = TypeVar("T")
 
@@ -28,14 +30,14 @@ class Paginator(Generic[T]):
     def __init__(
         self,
         page: int = Query(
-            1,
+            DEFAULT_PAGE,
             ge=1,
             description="Page number (starts from 1)",
         ),
         page_size: int = Query(
-            10,
+            DEFAULT_PAGE_SIZE,
             ge=1,
-            le=100,
+            le=MAX_PAGE_SIZE,
             description="Number of items per page",
         ),
     ):

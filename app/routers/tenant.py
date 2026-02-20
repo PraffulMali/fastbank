@@ -1,9 +1,7 @@
 from typing import Annotated, List
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-
 from app.database import get_db
 from app.schemas.tenant import TenantCreate, TenantUpdate, TenantResponse
 from app.services.tenant_service import TenantService
@@ -28,7 +26,8 @@ async def create_tenant(
 
 @router.get("/", response_model=Page[TenantResponse])
 async def list_tenants(
-    db: Annotated[AsyncSession, Depends(get_db)], paginator: Paginator = Depends()
+    db: Annotated[AsyncSession, Depends(get_db)],
+    paginator: Paginator = Depends(),
 ):
     return await TenantService.list_tenants(db, paginator)
 
@@ -38,12 +37,10 @@ async def get_tenant(
     tenant_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    tenant = await TenantService.get_tenant(db, tenant_id)
-    if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
-        )
-    return tenant
+    try:
+        return await TenantService.get_tenant(db, tenant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.patch("/{tenant_id}", response_model=TenantResponse)
@@ -53,12 +50,7 @@ async def update_tenant(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     try:
-        tenant = await TenantService.update_tenant(db, tenant_id, tenant_update)
-        if not tenant:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
-            )
-        return tenant
+        return await TenantService.update_tenant(db, tenant_id, tenant_update)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -69,10 +61,6 @@ async def delete_tenant(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     try:
-        tenant = await TenantService.soft_delete_tenant(db, tenant_id)
-        if not tenant:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
-            )
+        await TenantService.soft_delete_tenant(db, tenant_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

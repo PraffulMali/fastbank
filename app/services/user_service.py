@@ -4,7 +4,7 @@ import secrets
 import time
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from jose import JWTError, jwt
 
@@ -26,6 +26,7 @@ from app.schemas.auth import UserLoginRequest, UserLoginResponse, TokenRefreshRe
 from app.utils.security import get_password_hash, verify_password, hash_token
 from app.utils.jwt import create_access_token, create_refresh_token
 from app.config.settings import settings
+from app.constants import ALGORITHM
 from app.database.redis import get_redis
 from app.services.account_service import AccountService
 from app.schemas.account import AccountCreateByAdmin
@@ -90,7 +91,7 @@ class UserService:
     ) -> TokenRefreshResponse:
         try:
             payload = jwt.decode(
-                refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+                refresh_token, settings.SECRET_KEY, algorithms=[ALGORITHM]
             )
 
             if payload.get("token_type") != "refresh":
@@ -158,6 +159,8 @@ class UserService:
     async def create_user_by_super_admin(
         db: AsyncSession, user_in: UserCreateBySuperAdmin
     ) -> tuple[User, str, str]:
+        if user_in.role != "ADMIN":
+            raise ValueError("SUPER_ADMIN can only create ADMIN users")
         tenant = await db.get(Tenant, user_in.tenant_id)
         if not tenant:
             raise ValueError("Tenant not found")
@@ -298,12 +301,13 @@ class UserService:
     def get_users_query(current_user: User):
         if current_user.role == UserRole.SUPER_ADMIN:
             return select(User).where(User.role == UserRole.ADMIN)
-        else:
-            return select(User).where(User.tenant_id == current_user.tenant_id)
+        return select(User).where(User.tenant_id == current_user.tenant_id)
 
     @staticmethod
     async def list_users(
-        db: AsyncSession, current_user: User, paginator: Paginator
+        db: AsyncSession,
+        current_user: User,
+        paginator: Paginator,
     ) -> Page:
         query = UserService.get_users_query(current_user)
         return await paginator.paginate(db, query)
@@ -392,6 +396,9 @@ class UserService:
         if not user:
             raise ValueError("User not found")
 
+        if current_user.id == user_id:
+            raise PermissionError("Admin can not delete an admin")
+
         if current_user.role == UserRole.SUPER_ADMIN:
             if user.role != UserRole.ADMIN:
                 raise PermissionError("SUPER_ADMIN can only delete ADMIN users")
@@ -415,6 +422,19 @@ class UserService:
 
         await db.commit()
         await db.refresh(user)
+
+        accounts = await AccountService.list_user_accounts(db, user_id, user.tenant_id)
+        for account in accounts:
+            try:
+                if account.is_active:
+                    await AccountService.soft_delete_account(db, account.id)
+            except ValueError as e:
+                import logging
+
+                logging.getLogger(__name__).error(
+                    f"Failed to soft delete account {account.id}: {str(e)}"
+                )
+
         return user
 
     @staticmethod
@@ -425,13 +445,13 @@ class UserService:
         user_id_str = await redis.get(f"verify_token:{hashed_token}")
 
         if not user_id_str:
-            return False
+            raise ValueError("Invalid or expired verification token")
 
         user_id = uuid.UUID(user_id_str)
         user = await db.get(User, user_id)
 
         if not user:
-            return False
+            raise ValueError("User not found")
 
         user.is_email_verified = True
         await db.commit()
@@ -441,12 +461,9 @@ class UserService:
 
     @staticmethod
     async def blacklist_token(token: str) -> bool:
-        from jose import jwt, JWTError
 
         try:
-            payload = jwt.decode(
-                token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-            )
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
             jti = payload.get("jti")
             exp = payload.get("exp")
 
@@ -501,13 +518,13 @@ class UserService:
         user_id_str = await redis.get(f"reset_token:{hashed_token}")
 
         if not user_id_str:
-            return False
+            raise ValueError("Invalid or expired reset token")
 
         user_id = uuid.UUID(user_id_str)
         user = await db.get(User, user_id)
 
         if not user:
-            return False
+            raise ValueError("User not found for password reset")
 
         user.password = get_password_hash(new_password)
         await db.commit()
