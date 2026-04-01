@@ -1,0 +1,89 @@
+from typing import TYPE_CHECKING
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.models.base import BaseModel
+
+if TYPE_CHECKING:
+    from app.models.user import User
+    from app.models.user_identity import UserIdentity
+    from app.models.account import Account
+    from app.models.transaction import Transaction
+    from app.models.loan import Loan
+    from app.models.loan_repayment import LoanRepayment
+    from app.models.notification import Notification
+    from app.models.account_type import AccountType
+    from app.models.loan_type import LoanType
+    from app.models.interest_rule import InterestRule
+
+
+class Tenant(BaseModel):
+    __tablename__ = "tenants"
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+
+    users: Mapped[list["User"]] = relationship(
+        "User", back_populates="tenant", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+    user_identities: Mapped[list["UserIdentity"]] = relationship(
+        "UserIdentity",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    accounts: Mapped[list["Account"]] = relationship(
+        "Account",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    transactions: Mapped[list["Transaction"]] = relationship(
+        "Transaction",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    loans: Mapped[list["Loan"]] = relationship(
+        "Loan", back_populates="tenant", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+    loan_repayments: Mapped[list["LoanRepayment"]] = relationship(
+        "LoanRepayment",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    notifications: Mapped[list["Notification"]] = relationship(
+        "Notification",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    account_types: Mapped[list["AccountType"]] = relationship(
+        "AccountType",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    loan_types: Mapped[list["LoanType"]] = relationship(
+        "LoanType",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    interest_rules: Mapped[list["InterestRule"]] = relationship(
+        "InterestRule",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    def __repr__(self) -> str:
+        return f"<Tenant(id={self.id})>"

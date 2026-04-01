@@ -9,3 +9,9 @@ wheels/
 # Virtual environments
 .venv
 .env
+scripts/
+
+*.md
+
+celerybeat-schedule.db
+fastbank.log
